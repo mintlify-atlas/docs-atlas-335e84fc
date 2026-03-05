@@ -1,0 +1,355 @@
+---
+title: 'Schedule Types'
+description: 'Understanding base schedules and flexible schedules with time limit configuration'
+icon: 'calendar'
+---
+
+## Overview
+
+ChecadorCumbres supports two distinct schedule types that determine how employee attendance is tracked and validated. Each schedule type has different rules for check-in/check-out timing, late detection, and flexibility.
+
+## Schedule Type Field
+
+Schedule types are stored in the employee record:
+
+```php
+// In Empleado model
+protected $fillable = [
+    // ...
+    'tipo_horario',  // Values: 'horario base' or 'horario libre'
+    // ...
+];
+```
+
+<CardGroup cols={2}>
+  <Card title="Horario Base" icon="calendar-check">
+    Strict schedule with fixed entry/exit times and automatic late detection
+  </Card>
+  <Card title="Horario Libre" icon="calendar-days">
+    Flexible schedule with time-based check-in/check-out detection
+  </Card>
+</CardGroup>
+
+## Horario Base (Base Schedule)
+
+### Overview
+
+Base schedule is designed for employees with fixed working hours. It includes strict time limits and automatic late detection.
+
+### Schedule Detection
+
+The system identifies base schedule employees using case-insensitive comparison:
+
+```php
+private function esHorarioLibre($empleado)
+{
+    return strtolower($empleado->tipo_horario) === 'horario libre';
+}
+
+// If not "horario libre", it's treated as base schedule
+if ($this->esHorarioLibre($empleado)) {
+    return $this->agregarAsistenciaHorarioLibre($empleado, $ahora);
+}
+return $this->agregarAsistenciaHorarioBase($empleado, $ahora, $horaLimiteSalida, $fechaHoy);
+```
+
+### Time Limits Configuration
+
+Base schedule uses two critical time limits:
+
+```php
+// Entry cutoff time (default: 07:35:00)
+$horaLimiteEntrada = Configuracion::getValor('hora_limite_entrada', '07:35:00');
+
+// Exit cutoff time (default: 11:30:00)
+$horaLimiteSalida = Configuracion::getValor('hora_limite_salida', '11:30:00');
+```
+
+<Accordion title="Time Limit Meanings">
+**Hora Limite Entrada (07:35:00)**
+- Employees checking in after this time are marked as late
+- Used only for morning check-ins
+- Stored in attendance record as `retardo = true`
+
+**Hora Limite Salida (11:30:00)**
+- Divides the day into check-in period (before) and check-out period (after)
+- Before this time: system expects check-ins
+- After this time: system expects check-outs
+</Accordion>
+
+### Check-In Rules (Before 11:30 AM)
+
+```php
+if ($ahora->lessThan($horaLimiteSalida)) {
+    $asistencia = $this->obtenerAsistenciaHoy($empleado);
+    
+    if ($asistencia) {
+        if (!empty($asistencia->hora_entrada) && empty($asistencia->hora_salida)) {
+            return [
+                'success' => false,
+                'confirmar_salida' => true,
+                'message' => 'Ya has marcado tu entrada. ¿Quieres marcar tu salida?',
+            ];
+        }
+        if (!empty($asistencia->hora_entrada) && !empty($asistencia->hora_salida)) {
+            return [
+                'success' => false,
+                'message' => 'Ya tienes tu entrada y salida marcadas para hoy.',
+            ];
+        }
+    }
+    
+    $horaLimiteCompleta = \Carbon\Carbon::parse(
+        $fechaHoy . ' ' . Configuracion::getValor('hora_limite_entrada', '07:35:00')
+    );
+    return $this->registrarEntrada($empleado, $ahora, $horaLimiteCompleta);
+}
+```
+
+**Check-in behavior:**
+1. **No existing record**: Creates check-in with late detection
+2. **Already checked in**: Prompts for early check-out confirmation
+3. **Fully complete**: Returns error message
+
+### Check-Out Rules (After 11:30 AM)
+
+```php
+// After horaLimiteSalida
+$asistencia = $this->obtenerAsistenciaHoy($empleado);
+
+if ($asistencia) {
+    if ($this->yaTieneSalidaHoy($asistencia)) {
+        return [
+            'success' => false,
+            'message' => 'Ya has marcado la salida para hoy.',
+        ];
+    }
+    return $this->registrarSalida($asistencia, $ahora);
+}
+
+return $this->crearSalidaSinEntrada($empleado, $ahora);
+```
+
+**Check-out behavior:**
+1. **Has check-in**: Records check-out normally
+2. **No check-in**: Creates check-out-only record and marks as late
+3. **Already checked out**: Returns error message
+
+### Late Detection Logic
+
+```php
+private function registrarEntrada($empleado, $ahora, $horaLimiteCompleta = null)
+{
+    $retardo = false;
+    
+    if ($horaLimiteCompleta) {
+        $retardo = $ahora->greaterThan($horaLimiteCompleta);
+    }
+    
+    Asistencia::create([
+        'empleado_id' => $empleado->id,
+        'hora_entrada' => $ahora,
+        'hora_salida' => null,
+        'retardo' => $retardo,
+    ]);
+}
+```
+
+<Warning>
+Employees with base schedule who check out without checking in will be automatically marked as late (`retardo = true`).
+</Warning>
+
+### Missing Check-In Handling
+
+```php
+private function crearSalidaSinEntrada($empleado, $ahora)
+{
+    $retardo = false;
+    $horaE = $ahora;
+    
+    if (strtolower($empleado->tipo_horario) === 'horario base') {
+        $horaE = null;    // No check-in time recorded
+        $retardo = true;  // Automatically marked as late
+    }
+    
+    Asistencia::create([
+        'empleado_id' => $empleado->id,
+        'hora_entrada' => $horaE,
+        'hora_salida' => $ahora,
+        'retardo' => $retardo,
+    ]);
+}
+```
+
+## Horario Libre (Flexible Schedule)
+
+### Overview
+
+Flexible schedule is designed for employees without strict arrival times. The system uses intelligent time-based detection to determine check-in vs check-out.
+
+### Detection Logic
+
+```php
+private function agregarAsistenciaHorarioLibre($empleado, $ahora)
+{
+    $asistencia = $this->obtenerAsistenciaHoy($empleado);
+    
+    if (!$asistencia) {
+        // No record exists - this is check-in
+        return $this->registrarEntrada($empleado, $ahora);
+    }
+    
+    if ($asistencia && is_null($asistencia->hora_salida)) {
+        // Has check-in but no check-out - validate check-out
+        return $this->validarSalidaHorarioLibre($asistencia, $ahora);
+    }
+    
+    // Both check-in and check-out exist
+    return [
+        'success' => false,
+        'message' => 'Ya tienes registrada la entrada y salida para hoy.',
+    ];
+}
+```
+
+### Time-Based Check-Out Validation
+
+The system uses elapsed time since check-in to prevent accidental early check-outs:
+
+```php
+private function validarSalidaHorarioLibre($asistencia, $ahora)
+{
+    $horaEntrada = \Carbon\Carbon::parse($asistencia->hora_entrada);
+    $minutosDesdeEntrada = $horaEntrada->diffInMinutes($ahora);
+    
+    if ($minutosDesdeEntrada < 60) {
+        // Less than 1 hour - require confirmation
+        return [
+            'success' => false,
+            'confirmar_salida' => true,
+            'message' => 'Ya has marcado tu entrada. ¿Quieres marcar tu salida?',
+            'asistencia_id' => $asistencia->id,
+        ];
+    }
+    
+    // More than 1 hour - automatically record check-out
+    return $this->registrarSalida($asistencia, $ahora);
+}
+```
+
+<Info>
+The 60-minute threshold prevents employees from accidentally checking out immediately after checking in.
+</Info>
+
+### No Late Detection
+
+Flexible schedule employees are never automatically marked as late:
+
+```php
+// registrarEntrada is called WITHOUT horaLimiteCompleta parameter
+return $this->registrarEntrada($empleado, $ahora);
+
+// In registrarEntrada:
+$retardo = false;  // Always false for flexible schedules
+if ($horaLimiteCompleta) {  // This is null for flexible
+    $retardo = $ahora->greaterThan($horaLimiteCompleta);
+}
+```
+
+### Missing Check-In Handling
+
+For flexible schedules, missing check-in is handled differently:
+
+```php
+if (strtolower($empleado->tipo_horario) === 'horario base') {
+    $horaE = null;
+    $retardo = true; 
+} else {
+    // For flexible schedule
+    $horaE = $ahora;      // Use current time as check-in
+    $retardo = false;     // Not marked as late
+}
+```
+
+## Configuration Management
+
+Time limits are stored in the `configuraciones` table and retrieved using the `Configuracion` model:
+
+```php
+class Configuracion extends Model
+{
+    protected $table = 'configuraciones';
+    protected $fillable = ['clave', 'valor'];
+    public $timestamps = false;
+    
+    public static function getValor($clave, $default = null)
+    {
+        return optional(static::where('clave', $clave)->first())->valor ?? $default;
+    }
+}
+```
+
+### Configurable Parameters
+
+<CardGroup cols={2}>
+  <Card title="hora_limite_entrada" icon="clock">
+    Entry time limit for late detection (default: 07:35:00)
+  </Card>
+  <Card title="hora_limite_salida" icon="clock-rotate-left">
+    Cutoff between check-in and check-out periods (default: 11:30:00)
+  </Card>
+</CardGroup>
+
+## Comparison Table
+
+| Feature | Horario Base | Horario Libre |
+|---------|--------------|---------------|
+| **Late Detection** | Automatic based on `hora_limite_entrada` | None |
+| **Time Cutoffs** | Uses both entry and exit time limits | No time limits |
+| **Check-Out Logic** | Time-of-day based (before/after 11:30) | Time-elapsed based (60 min threshold) |
+| **Missing Check-In** | `hora_entrada = null`, `retardo = true` | `hora_entrada = current time`, `retardo = false` |
+| **Confirmation Required** | For early check-out (before 11:30) | For check-out within 60 minutes |
+| **Typical Use Case** | Office workers, teachers, administrative staff | Managers, field workers, flexible roles |
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Schedule Assignment" icon="user-tag">
+    Assign base schedules to roles with fixed hours and flexible schedules to roles with variable hours.
+  </Card>
+  <Card title="Time Limit Configuration" icon="sliders">
+    Adjust `hora_limite_entrada` and `hora_limite_salida` in the configuration table to match your organization's schedule.
+  </Card>
+  <Card title="Testing Schedule Logic" icon="flask">
+    Test both schedule types thoroughly, especially edge cases around time cutoffs.
+  </Card>
+  <Card title="User Communication" icon="comment">
+    Clearly communicate to employees which schedule type they're assigned and how it affects their attendance tracking.
+  </Card>
+</CardGroup>
+
+## Code Example: Checking Schedule Type
+
+```php
+// Check if employee has flexible schedule
+$esFlexible = strtolower($empleado->tipo_horario) === 'horario libre';
+
+if ($esFlexible) {
+    // Handle flexible schedule logic
+    echo "Employee has flexible schedule";
+} else {
+    // Handle base schedule logic
+    echo "Employee has base schedule";
+}
+```
+
+## Related Resources
+
+<CardGroup cols={2}>
+  <Card title="Attendance Tracking" icon="clock" href="/features/attendance-tracking">
+    See how schedule types affect attendance tracking
+  </Card>
+  <Card title="Employee Management" icon="users" href="/features/employee-management">
+    Learn how to assign schedule types to employees
+  </Card>
+</CardGroup>

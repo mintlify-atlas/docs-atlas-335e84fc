@@ -1,0 +1,468 @@
+---
+title: 'Report Endpoints'
+description: 'API reference for generating attendance reports in PDF and Excel formats'
+---
+
+## Overview
+
+The report endpoints generate attendance reports with advanced filtering and formatting. Reports include attendance data, worked hours calculations, and support both PDF and Excel output formats.
+
+## Generate PDF Report
+
+<CodeGroup>
+```http GET /admin/asistencias/reporte/pdf
+GET /admin/asistencias/reporte/pdf?fecha_inicio=2024-03-01&fecha_fin=2024-03-31&departamento=primaria
+Authorization: Bearer {token}
+```
+</CodeGroup>
+
+Generates a comprehensive attendance report in PDF format with landscape orientation.
+
+### Authentication
+Required. User must be authenticated.
+
+### Query Parameters
+
+All parameters are optional. Without parameters, generates today's report.
+
+<ParamField query="buscar" type="string">
+  Search by employee name, last name, or ID (case-insensitive)
+</ParamField>
+
+<ParamField query="fecha_inicio" type="date" format="Y-m-d">
+  Start date for the report period
+</ParamField>
+
+<ParamField query="fecha_fin" type="date" format="Y-m-d">
+  End date for the report period
+</ParamField>
+
+<ParamField query="departamento" type="string">
+  Filter by specific department
+</ParamField>
+
+<ParamField query="retardo" type="string" enum='["0", "1"]'>
+  Filter by tardiness: "1" for late, "0" for on-time
+</ParamField>
+
+<ParamField query="hora_entrada" type="string" enum='["0", "1"]'>
+  Filter by entry presence: "1" has entry, "0" no entry
+</ParamField>
+
+<ParamField query="hora_salida" type="string" enum='["0", "1"]'>
+  Filter by exit presence: "1" has exit, "0" no exit
+</ParamField>
+
+### Response
+
+Returns a PDF document (application/pdf) displayed in the browser.
+
+<ResponseField name="Content-Type" type="string">
+  application/pdf
+</ResponseField>
+
+<ResponseField name="Content-Disposition" type="string">
+  inline; filename="reporte_asistencias_YYYY-MM-DD.pdf"
+</ResponseField>
+
+### PDF Content Structure
+
+- **Header**: Report title and date range
+- **Employee Information**: ID, full name, department, email
+- **Attendance Details**: Date, entry time, exit time, tardiness flag
+- **Missing Days**: All days in range without attendance are included
+- **Total Hours**: Summary of worked hours (only for single employee reports)
+
+### Worked Hours Calculation
+
+For single-employee reports:
+- Calculates total hours between entry and exit times
+- Handles overnight shifts (exit time next day)
+- Formats as "Xh Ymin"
+- Only includes complete attendance records (both entry and exit)
+
+### Technical Details
+
+- **PDF Library**: DomPDF
+- **Paper Size**: A4
+- **Orientation**: Landscape
+- **Memory Limit**: Temporarily increased to 1024MB
+- **Execution Time**: Temporarily increased to 300 seconds
+- **Rendering**: HTML5 parser enabled
+
+### Error Responses
+
+<CodeGroup>
+```text 302 Redirect (Error)
+Location: previous page
+Session: error = "Error al generar PDF: {error_message}"
+```
+</CodeGroup>
+
+---
+
+## Generate Excel Report
+
+<CodeGroup>
+```http GET /admin/asistencias/reporte/excel
+GET /admin/asistencias/reporte/excel?fecha_inicio=2024-03-01&fecha_fin=2024-03-31&departamento=primaria&retardo=1
+Authorization: Bearer {token}
+```
+</CodeGroup>
+
+Generates an attendance report in Excel format (.xlsx) with formatted styling and conditional formatting.
+
+### Authentication
+Required. User must be authenticated.
+
+### Query Parameters
+
+Identical to PDF report parameters. All parameters are optional.
+
+<ParamField query="buscar" type="string">
+  Search by employee name, last name, or ID
+</ParamField>
+
+<ParamField query="fecha_inicio" type="date" format="Y-m-d">
+  Start date for the report period
+</ParamField>
+
+<ParamField query="fecha_fin" type="date" format="Y-m-d">
+  End date for the report period
+</ParamField>
+
+<ParamField query="departamento" type="string">
+  Filter by department
+</ParamField>
+
+<ParamField query="retardo" type="string" enum='["0", "1"]'>
+  Filter by tardiness status
+</ParamField>
+
+<ParamField query="hora_entrada" type="string" enum='["0", "1"]'>
+  Filter by entry presence
+</ParamField>
+
+<ParamField query="hora_salida" type="string" enum='["0", "1"]'>
+  Filter by exit presence
+</ParamField>
+
+### Response
+
+Returns an Excel file (.xlsx) for download.
+
+<ResponseField name="Content-Type" type="string">
+  application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+</ResponseField>
+
+<ResponseField name="Content-Disposition" type="string">
+  attachment; filename="reporte_asistencias_YYYY-MM-DD.xlsx"
+</ResponseField>
+
+### Excel File Structure
+
+#### Column Headers
+
+1. **N. Empleado**: Employee number
+2. **Nombre**: Full name (nombres + apellido_paterno + apellido_materno)
+3. **Departamento**: Department name
+4. **Correo**: Email address
+5. **Fecha**: Attendance date (format: DD/MM/YYYY)
+6. **Hora de entrada**: Entry time (format: HH:MM) or "Sin registro"
+7. **Hora de salida**: Exit time (format: HH:MM) or "Sin registro"
+8. **Retardo**: "Sí", "No", or "Sin registro"
+
+#### Formatting
+
+**Header Row (Row 1):**
+- Bold font
+- Gray background (#DDDDDD)
+- Center alignment
+
+**Data Rows:**
+- Alternating row colors (white and #F9F9F9)
+- Center alignment
+- Thin borders around all cells
+
+**Conditional Formatting:**
+- "Sin registro" text: Red color (#FF0000)
+- "Retardo: Sí": Red color (#FF0000)
+- "Retardo: No": Green color (#008000)
+
+**Footer (Last Row, if single employee):**
+- Bold font
+- Total worked hours in format "Xh Ymin horas"
+
+### Technical Details
+
+- **Excel Library**: Maatwebsite/Laravel-Excel (PhpSpreadsheet)
+- **File Format**: XLSX (Office Open XML)
+- **Implements**: FromArray, WithHeadings, WithStyles interfaces
+
+### Error Responses
+
+<CodeGroup>
+```text 302 Redirect (Error)
+Location: previous page
+Session: error = "Error al generar Excel: {error_message}"
+```
+</CodeGroup>
+
+---
+
+## Report Data Logic
+
+### Missing Days Handling
+
+When date range filters are applied:
+1. System identifies all employees matching filters
+2. Generates complete date range from start to end
+3. For each employee and each date:
+   - If attendance exists: includes actual record
+   - If attendance missing: includes virtual record with null values
+4. Result: Complete attendance matrix with no gaps
+
+### Worked Hours Calculation
+
+Only calculated when report contains a single employee:
+
+<CodeGroup>
+```php Calculation Logic
+// For each attendance record
+if ($attendance->hora_entrada && $attendance->hora_salida) {
+    $entry = Carbon::parse($attendance->hora_entrada);
+    $exit = Carbon::parse($attendance->hora_salida);
+    
+    if ($exit >= $entry) {
+        // Same day
+        $minutes = $exit->diffInMinutes($entry);
+    } else {
+        // Next day shift
+        $minutes = $exit->addDay()->diffInMinutes($entry);
+    }
+    
+    $totalHours += $minutes / 60;
+}
+
+// Format output
+$hours = floor($totalHours);
+$minutes = round(($totalHours - $hours) * 60);
+return "{$hours}h {$minutes}min";
+```
+</CodeGroup>
+
+---
+
+## Code Examples
+
+### Download PDF Report with cURL
+
+<CodeGroup>
+```bash cURL
+# Download today's report
+curl -o "report_$(date +%Y%m%d).pdf" \
+  -H "Cookie: laravel_session=your-session-cookie" \
+  "https://your-domain.com/admin/asistencias/reporte/pdf"
+
+# Download filtered report
+curl -o "report_march_2024.pdf" \
+  -H "Cookie: laravel_session=your-session-cookie" \
+  "https://your-domain.com/admin/asistencias/reporte/pdf?fecha_inicio=2024-03-01&fecha_fin=2024-03-31&departamento=primaria&retardo=1"
+```
+
+```bash wget
+# Download with wget
+wget --header="Cookie: laravel_session=your-session-cookie" \
+  -O report.pdf \
+  "https://your-domain.com/admin/asistencias/reporte/pdf?fecha_inicio=2024-03-01&fecha_fin=2024-03-31"
+```
+</CodeGroup>
+
+### Download Excel Report with PHP
+
+<CodeGroup>
+```php PHP (Guzzle)
+use GuzzleHttp\Client;
+
+$client = new Client();
+
+$queryParams = [
+    'fecha_inicio' => '2024-03-01',
+    'fecha_fin' => '2024-03-31',
+    'departamento' => 'primaria',
+    'retardo' => '1'
+];
+
+try {
+    $response = $client->get('https://your-domain.com/admin/asistencias/reporte/excel', [
+        'query' => $queryParams,
+        'cookies' => $cookieJar,
+        'sink' => 'attendance_report_' . date('Y-m-d') . '.xlsx'
+    ]);
+    
+    echo "Report downloaded successfully!\n";
+} catch (\Exception $e) {
+    echo "Error: " . $e->getMessage();
+}
+```
+
+```php Laravel HTTP Client
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Storage;
+
+$response = Http::withCookies([
+    'laravel_session' => session()->getId()
+], config('app.url'))
+->get('https://your-domain.com/admin/asistencias/reporte/excel', [
+    'fecha_inicio' => '2024-03-01',
+    'fecha_fin' => '2024-03-31',
+    'departamento' => 'primaria'
+]);
+
+if ($response->successful()) {
+    $filename = 'reports/attendance_' . date('Y-m-d') . '.xlsx';
+    Storage::put($filename, $response->body());
+    echo "Report saved to: {$filename}\n";
+}
+```
+</CodeGroup>
+
+### JavaScript Download Example
+
+<CodeGroup>
+```javascript Fetch API
+// Download PDF report
+async function downloadPDFReport(filters = {}) {
+  const params = new URLSearchParams(filters);
+  
+  try {
+    const response = await fetch(
+      `/admin/asistencias/reporte/pdf?${params}`,
+      { credentials: 'include' }
+    );
+    
+    if (!response.ok) throw new Error('Download failed');
+    
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `reporte_asistencias_${new Date().toISOString().split('T')[0]}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    a.remove();
+    
+    console.log('Report downloaded successfully');
+  } catch (error) {
+    console.error('Error downloading report:', error);
+  }
+}
+
+// Usage
+downloadPDFReport({
+  fecha_inicio: '2024-03-01',
+  fecha_fin: '2024-03-31',
+  departamento: 'primaria',
+  retardo: '1'
+});
+```
+
+```javascript Axios
+import axios from 'axios';
+
+async function downloadExcelReport(filters) {
+  try {
+    const response = await axios.get('/admin/asistencias/reporte/excel', {
+      params: filters,
+      responseType: 'blob',
+      withCredentials: true
+    });
+    
+    const url = window.URL.createObjectURL(new Blob([response.data]));
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `attendance_report_${Date.now()}.xlsx`);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    
+    console.log('Excel report downloaded');
+  } catch (error) {
+    console.error('Error:', error.response?.data || error.message);
+  }
+}
+
+// Usage
+downloadExcelReport({
+  fecha_inicio: '2024-03-01',
+  fecha_fin: '2024-03-31',
+  departamento: 'secundaria'
+});
+```
+</CodeGroup>
+
+### Python Download Example
+
+<CodeGroup>
+```python Python (Requests)
+import requests
+from datetime import datetime
+
+def download_pdf_report(filters=None):
+    """Download PDF attendance report"""
+    url = "https://your-domain.com/admin/asistencias/reporte/pdf"
+    
+    # Session cookies required
+    session = requests.Session()
+    session.cookies.set('laravel_session', 'your-session-cookie')
+    
+    try:
+        response = session.get(url, params=filters or {}, stream=True)
+        response.raise_for_status()
+        
+        filename = f"report_{datetime.now().strftime('%Y%m%d')}.pdf"
+        with open(filename, 'wb') as f:
+            for chunk in response.iter_content(chunk_size=8192):
+                f.write(chunk)
+        
+        print(f"Report downloaded: {filename}")
+        return filename
+    except requests.exceptions.RequestException as e:
+        print(f"Error downloading report: {e}")
+        return None
+
+# Usage examples
+download_pdf_report()
+
+download_pdf_report({
+    'fecha_inicio': '2024-03-01',
+    'fecha_fin': '2024-03-31',
+    'departamento': 'primaria',
+    'retardo': '1'
+})
+```
+</CodeGroup>
+
+---
+
+## Performance Considerations
+
+### PDF Generation
+- Memory limit increased to 1024MB for large reports
+- Execution time limit: 300 seconds
+- Uses streaming to avoid memory exhaustion
+- Recommended maximum: 1000 records per report
+
+### Excel Generation
+- More efficient than PDF for large datasets
+- Can handle 5000+ records
+- Conditional formatting applied per-row
+- Auto-width columns not implemented for performance
+
+### Optimization Tips
+
+1. **Use date ranges wisely**: Shorter ranges generate faster
+2. **Filter by department**: Reduces dataset size
+3. **Single employee reports**: Enable worked hours calculation
+4. **Excel for data**: Use Excel for large reports, PDF for printing

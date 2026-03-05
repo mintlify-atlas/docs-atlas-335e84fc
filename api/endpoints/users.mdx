@@ -1,0 +1,658 @@
+---
+title: 'User Endpoints'
+description: 'API reference for user management and system configuration'
+---
+
+## Overview
+
+The user endpoints handle administrator account management and system-wide configuration settings. These endpoints allow creating, updating, and deleting admin users, as well as configuring attendance system parameters.
+
+## List Users
+
+<CodeGroup>
+```http GET /admin/preferencias
+GET /admin/preferencias
+Authorization: Bearer {token}
+```
+</CodeGroup>
+
+Retrieves all system users. Returns HTML view with user list.
+
+### Authentication
+Required. User must be authenticated.
+
+### Response
+
+Returns an HTML view displaying all users.
+
+<ResponseField name="usuarios" type="array">
+  Collection of all users
+  <Expandable title="user object">
+    <ResponseField name="id" type="integer">
+      User ID
+    </ResponseField>
+    <ResponseField name="name" type="string">
+      User first name
+    </ResponseField>
+    <ResponseField name="last_name" type="string">
+      User last name
+    </ResponseField>
+    <ResponseField name="email" type="string">
+      User email address
+    </ResponseField>
+    <ResponseField name="level_user" type="integer">
+      User access level (0, 1, or 2)
+    </ResponseField>
+    <ResponseField name="yes_notifications" type="boolean">
+      Whether user receives notifications
+    </ResponseField>
+    <ResponseField name="foto" type="string|null">
+      User photo filename
+    </ResponseField>
+    <ResponseField name="created_at" type="datetime">
+      Account creation timestamp
+    </ResponseField>
+    <ResponseField name="updated_at" type="datetime">
+      Last update timestamp
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+### Error Responses
+
+<CodeGroup>
+```text 302 Redirect (Error)
+Location: previous page
+Session: error = "Error al cargar la página de Usuarios: {error_message}"
+```
+</CodeGroup>
+
+---
+
+## Get Create User Form
+
+<CodeGroup>
+```http GET /admin/usuarios/crear
+GET /admin/usuarios/crear
+Authorization: Bearer {token}
+```
+</CodeGroup>
+
+Displays the user creation form.
+
+### Authentication
+Required. User must be authenticated.
+
+### Response
+
+Returns an HTML view with the user creation form.
+
+---
+
+## Create User
+
+<CodeGroup>
+```http POST /admin/usuarios
+POST /admin/usuarios
+Content-Type: application/x-www-form-urlencoded
+Authorization: Bearer {token}
+
+name=Juan&last_name=Garcia&email=admin@school.edu.mx&password=secret123&level_user=1&yes_notifications=1
+```
+</CodeGroup>
+
+Creates a new administrator user account.
+
+### Authentication
+Required. User must be authenticated.
+
+### Request Body
+
+<ParamField body="name" type="string" required>
+  User first name
+</ParamField>
+
+<ParamField body="last_name" type="string" required>
+  User last name
+</ParamField>
+
+<ParamField body="email" type="string" required>
+  Valid email address with valid MX records. Must be unique.
+</ParamField>
+
+<ParamField body="password" type="string" required>
+  Password (minimum 6 characters)
+</ParamField>
+
+<ParamField body="level_user" type="integer" required>
+  User access level:
+  - `0`: Basic access
+  - `1`: Standard admin
+  - `2`: Super admin
+</ParamField>
+
+<ParamField body="yes_notifications" type="boolean" default="false">
+  Whether user should receive email notifications (1 for true, 0 or omit for false)
+</ParamField>
+
+### Response
+
+<CodeGroup>
+```text 302 Redirect (Success)
+Location: /admin/preferencias
+Session: success = "Usuario creado correctamente."
+```
+
+```text 302 Redirect (Error)
+Location: previous page
+Session: error = "Error al guardar usuario: {error_message}"
+```
+
+```json 422 Validation Error
+{
+  "message": "The given data was invalid.",
+  "errors": {
+    "email": ["The email has already been taken."],
+    "password": ["The password must be at least 6 characters."],
+    "level_user": ["The selected level_user is invalid."]
+  }
+}
+```
+</CodeGroup>
+
+### Notes
+
+- Password is automatically hashed using Laravel's Hash facade
+- Email domain must have valid MX records
+- `yes_notifications` defaults to false if not provided
+
+---
+
+## Get Edit User Form
+
+<CodeGroup>
+```http GET /admin/usuarios/{id}/editar
+GET /admin/usuarios/5/editar
+Authorization: Bearer {token}
+```
+</CodeGroup>
+
+Displays the user edit form.
+
+### Authentication
+Required. User must be authenticated.
+
+### Path Parameters
+
+<ParamField path="id" type="integer" required>
+  User ID to edit
+</ParamField>
+
+### Response
+
+Returns an HTML view with the user edit form and current user data.
+
+### Error Responses
+
+<CodeGroup>
+```text 404 Not Found
+Location: previous page
+Session: error = "Error al editar usuario: No query results for model [App\\Models\\User]"
+```
+</CodeGroup>
+
+---
+
+## Update User
+
+<CodeGroup>
+```http PUT /admin/usuarios/{id}
+PUT /admin/usuarios/5
+Content-Type: application/x-www-form-urlencoded
+Authorization: Bearer {token}
+
+name=Juan Carlos&last_name=Garcia Lopez&email=admin@school.edu.mx&password=newsecret456&level_user=2&yes_notifications=1
+```
+</CodeGroup>
+
+Updates an existing user account.
+
+### Authentication
+Required. User must be authenticated.
+
+### Path Parameters
+
+<ParamField path="id" type="integer" required>
+  User ID to update
+</ParamField>
+
+### Request Body
+
+<ParamField body="name" type="string" required>
+  User first name
+</ParamField>
+
+<ParamField body="last_name" type="string" required>
+  User last name
+</ParamField>
+
+<ParamField body="email" type="string" required>
+  Valid email address. Must be unique (except for current user).
+</ParamField>
+
+<ParamField body="password" type="string" optional>
+  New password (minimum 6 characters). If omitted or empty, password remains unchanged.
+</ParamField>
+
+<ParamField body="level_user" type="integer" required>
+  User access level (0, 1, or 2)
+</ParamField>
+
+<ParamField body="yes_notifications" type="boolean" default="false">
+  Whether user receives notifications
+</ParamField>
+
+### Response
+
+<CodeGroup>
+```text 302 Redirect (Success)
+Location: /admin/preferencias
+Session: success = "Usuario actualizado."
+```
+
+```text 302 Redirect (Error)
+Location: previous page
+Session: error = "Error al actualizar usuario: {error_message}"
+```
+
+```json 422 Validation Error
+{
+  "message": "The given data was invalid.",
+  "errors": {
+    "email": ["The email has already been taken."],
+    "password": ["The password must be at least 6 characters."]
+  }
+}
+```
+</CodeGroup>
+
+### Notes
+
+- Password is optional on update - omit to keep existing password
+- If password is provided, it will be hashed before saving
+- Email uniqueness check excludes the current user's ID
+
+---
+
+## Delete User
+
+<CodeGroup>
+```http DELETE /admin/usuarios/{id}
+DELETE /admin/usuarios/5
+Authorization: Bearer {token}
+```
+</CodeGroup>
+
+Deletes a user account.
+
+### Authentication
+Required. User must be authenticated.
+
+### Path Parameters
+
+<ParamField path="id" type="integer" required>
+  User ID to delete
+</ParamField>
+
+### Response
+
+<CodeGroup>
+```text 302 Redirect (Success)
+Location: /admin/preferencias
+Session: success = "Usuario eliminado."
+```
+
+```text 302 Redirect (Error)
+Location: /admin/preferencias
+Session: error = "Error al eliminar usuario: {error_message}"
+```
+
+```text 404 Not Found
+Location: /admin/preferencias
+Session: error = "Error al eliminar usuario: No query results for model [App\\Models\\User]"
+```
+</CodeGroup>
+
+### Notes
+
+- Deleting a user is permanent (hard delete)
+- Consider the implications of deleting admin accounts
+
+---
+
+## Get Configuration Page
+
+<CodeGroup>
+```http GET /admin/preferencias/configurar
+GET /admin/preferencias/configurar
+Authorization: Bearer {token}
+```
+</CodeGroup>
+
+Displays the system configuration page with current settings.
+
+### Authentication
+Required. User must be authenticated.
+
+### Response
+
+Returns an HTML view with system configuration form.
+
+<ResponseField name="config" type="object">
+  Key-value pairs of system configuration
+  <Expandable title="properties">
+    <ResponseField name="hora_limite_entrada" type="string">
+      Entry time limit in HH:MM format (e.g., "07:35")
+    </ResponseField>
+    <ResponseField name="hora_limite_salida" type="string">
+      Exit time limit in HH:MM format (e.g., "11:30")
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+---
+
+## Update Configuration
+
+<CodeGroup>
+```http POST /admin/preferencias/configuracion
+POST /admin/preferencias/configuracion
+Content-Type: application/x-www-form-urlencoded
+Authorization: Bearer {token}
+
+hora_limite_entrada=07:30
+```
+</CodeGroup>
+
+Updates system-wide attendance configuration settings.
+
+### Authentication
+Required. User must be authenticated.
+
+### Request Body
+
+<ParamField body="hora_limite_entrada" type="string" required>
+  Entry time limit in HH:MM format (24-hour). Used to determine tardiness for base schedule employees.
+</ParamField>
+
+### Response
+
+<CodeGroup>
+```text 302 Redirect (Success)
+Location: /admin/preferencias
+Session: success = "Configuraciones actualizadas correctamente."
+```
+
+```text 302 Redirect (Error)
+Location: previous page
+Session: error = "Error al actualizar usuario: {error_message}"
+```
+
+```json 422 Validation Error
+{
+  "message": "The given data was invalid.",
+  "errors": {
+    "hora_limite_entrada": ["The hora_limite_entrada does not match the format H:i."]
+  }
+}
+```
+</CodeGroup>
+
+### Configuration Keys
+
+The system uses the `configuraciones` table with key-value pairs:
+
+<ResponseField name="hora_limite_entrada" type="string" default="07:35:00">
+  Time limit for marking entry. Employees arriving after this time are marked as late (`retardo=true`).
+</ResponseField>
+
+<ResponseField name="hora_limite_salida" type="string" default="11:30:00">
+  Time threshold that separates entry period from exit period. Before this time, scans mark entry; after this time, scans mark exit.
+</ResponseField>
+
+### Notes
+
+- Configuration uses `updateOrCreate`, so it will create new keys if they don't exist
+- Changes take effect immediately for all attendance operations
+- Only `hora_limite_entrada` is currently editable through the form
+- `hora_limite_salida` is hardcoded in the system but can be modified in the database
+
+---
+
+## Code Examples
+
+### Create User with cURL
+
+<CodeGroup>
+```bash cURL
+curl -X POST https://your-domain.com/admin/usuarios \
+  -H "Cookie: laravel_session=your-session-cookie" \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "name=Juan" \
+  -d "last_name=Garcia" \
+  -d "email=admin@school.edu.mx" \
+  -d "password=secret123" \
+  -d "level_user=1" \
+  -d "yes_notifications=1"
+```
+</CodeGroup>
+
+### Update Configuration with PHP
+
+<CodeGroup>
+```php PHP (Guzzle)
+use GuzzleHttp\Client;
+
+$client = new Client();
+
+try {
+    $response = $client->post('https://your-domain.com/admin/preferencias/configuracion', [
+        'form_params' => [
+            'hora_limite_entrada' => '07:30'
+        ],
+        'cookies' => $cookieJar
+    ]);
+    
+    echo "Configuration updated successfully\n";
+} catch (\Exception $e) {
+    echo "Error: " . $e->getMessage();
+}
+```
+
+```php Laravel HTTP Client
+use Illuminate\Support\Facades\Http;
+
+$response = Http::withSession([
+    'laravel_session' => session()->getId()
+])->asForm()->post('https://your-domain.com/admin/preferencias/configuracion', [
+    'hora_limite_entrada' => '07:30'
+]);
+
+if ($response->successful()) {
+    echo "Configuration updated";
+}
+```
+</CodeGroup>
+
+### User Management with JavaScript
+
+<CodeGroup>
+```javascript Create User
+async function createUser(userData) {
+  const formData = new URLSearchParams();
+  formData.append('name', userData.name);
+  formData.append('last_name', userData.last_name);
+  formData.append('email', userData.email);
+  formData.append('password', userData.password);
+  formData.append('level_user', userData.level_user);
+  formData.append('yes_notifications', userData.yes_notifications ? '1' : '0');
+  
+  try {
+    const response = await fetch('/admin/usuarios', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+      },
+      body: formData,
+      credentials: 'include'
+    });
+    
+    if (response.redirected) {
+      window.location.href = response.url;
+    }
+  } catch (error) {
+    console.error('Error creating user:', error);
+  }
+}
+
+// Usage
+createUser({
+  name: 'Juan',
+  last_name: 'Garcia',
+  email: 'admin@school.edu.mx',
+  password: 'secret123',
+  level_user: 1,
+  yes_notifications: true
+});
+```
+
+```javascript Update User
+async function updateUser(userId, userData) {
+  const formData = new URLSearchParams();
+  formData.append('_method', 'PUT');
+  formData.append('name', userData.name);
+  formData.append('last_name', userData.last_name);
+  formData.append('email', userData.email);
+  if (userData.password) {
+    formData.append('password', userData.password);
+  }
+  formData.append('level_user', userData.level_user);
+  formData.append('yes_notifications', userData.yes_notifications ? '1' : '0');
+  
+  try {
+    const response = await fetch(`/admin/usuarios/${userId}`, {
+      method: 'POST', // Laravel method spoofing
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+      },
+      body: formData,
+      credentials: 'include'
+    });
+    
+    if (response.redirected) {
+      console.log('User updated successfully');
+      window.location.href = response.url;
+    }
+  } catch (error) {
+    console.error('Error updating user:', error);
+  }
+}
+
+// Usage
+updateUser(5, {
+  name: 'Juan Carlos',
+  last_name: 'Garcia Lopez',
+  email: 'admin@school.edu.mx',
+  level_user: 2,
+  yes_notifications: true
+  // password omitted - will not be changed
+});
+```
+
+```javascript Delete User
+async function deleteUser(userId) {
+  if (!confirm('¿Está seguro de eliminar este usuario?')) {
+    return;
+  }
+  
+  const formData = new URLSearchParams();
+  formData.append('_method', 'DELETE');
+  
+  try {
+    const response = await fetch(`/admin/usuarios/${userId}`, {
+      method: 'POST', // Laravel method spoofing
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+      },
+      body: formData,
+      credentials: 'include'
+    });
+    
+    if (response.redirected) {
+      console.log('User deleted');
+      window.location.href = response.url;
+    }
+  } catch (error) {
+    console.error('Error deleting user:', error);
+  }
+}
+
+// Usage
+deleteUser(5);
+```
+</CodeGroup>
+
+### Python Examples
+
+<CodeGroup>
+```python Create User (Requests)
+import requests
+
+url = "https://your-domain.com/admin/usuarios"
+session = requests.Session()
+session.cookies.set('laravel_session', 'your-session-cookie')
+
+user_data = {
+    'name': 'Juan',
+    'last_name': 'Garcia',
+    'email': 'admin@school.edu.mx',
+    'password': 'secret123',
+    'level_user': 1,
+    'yes_notifications': 1
+}
+
+try:
+    response = session.post(url, data=user_data)
+    if response.status_code == 302:
+        print("User created successfully")
+        print(f"Redirected to: {response.headers.get('Location')}")
+    else:
+        print(f"Error: {response.status_code}")
+except Exception as e:
+    print(f"Error: {e}")
+```
+
+```python Update Configuration
+import requests
+
+url = "https://your-domain.com/admin/preferencias/configuracion"
+session = requests.Session()
+session.cookies.set('laravel_session', 'your-session-cookie')
+
+config_data = {
+    'hora_limite_entrada': '07:30'
+}
+
+try:
+    response = session.post(url, data=config_data)
+    if response.status_code == 302:
+        print("Configuration updated")
+    else:
+        print(f"Error: {response.status_code}")
+except Exception as e:
+    print(f"Error: {e}")
+```
+</CodeGroup>

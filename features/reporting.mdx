@@ -1,0 +1,521 @@
+---
+title: 'Reporting'
+description: 'Generate PDF and Excel reports with hours calculation, filtering, and date range selection'
+icon: 'chart-bar'
+---
+
+## Overview
+
+ChecadorCumbres provides comprehensive reporting capabilities for attendance data, including PDF generation, Excel exports, automated hours calculation, and advanced filtering options. Reports can be generated for individual employees or entire departments across custom date ranges.
+
+## Report Types
+
+<CardGroup cols={2}>
+  <Card title="PDF Reports" icon="file-pdf">
+    Landscape-oriented reports optimized for printing and archiving
+  </Card>
+  <Card title="Excel Exports" icon="file-excel">
+    Formatted spreadsheets with styling, colors, and formulas
+  </Card>
+</CardGroup>
+
+## PDF Report Generation
+
+### Implementation
+
+PDF reports are generated using the DomPDF library with memory and performance optimizations:
+
+```php
+public function generarReporte(Request $request)
+{
+    try {
+        // Increase memory and execution time temporarily
+        ini_set('memory_limit', '1024M');
+        set_time_limit(300);
+        
+        // Get attendance records with missing days filled in
+        $asistencias = $this->obtenerAsistenciasConDiasFaltantes($request);
+        
+        // Calculate total hours worked
+        $horasDecimales = $this->calcularHorasTrabajadas($asistencias);
+        $horasFormateadas = $this->formatearHoras($horasDecimales);
+        
+        // Render view as HTML first
+        $html = view('admin.asistencias.reporte', compact('asistencias', 'horasFormateadas'))->render();
+        
+        // Load PDF from HTML
+        $pdf = PDF::loadHTML($html)
+            ->setPaper('A4', 'landscape')
+            ->setOption('isHtml5ParserEnabled', true)
+            ->setOption('isRemoteEnabled', true);
+        
+        // Stream to avoid loading everything in memory
+        return $pdf->stream('reporte_asistencias_' . now()->format('Y-m-d') . '.pdf');
+    } catch (\Exception $e) {
+        return redirect()->back()->with('error', 'Error al generar PDF: ' . $e->getMessage());
+    }
+}
+```
+
+<Note>
+The system uses landscape orientation (`A4, 'landscape'`) to accommodate multiple columns of attendance data.
+</Note>
+
+### Performance Optimizations
+
+<Accordion title="Memory Management">
+```php
+ini_set('memory_limit', '1024M');
+set_time_limit(300);
+```
+
+- **Memory limit**: Increased to 1GB to handle large datasets
+- **Execution time**: Extended to 5 minutes for complex reports
+- **Streaming**: Uses `stream()` instead of `download()` to avoid memory buildup
+</Accordion>
+
+<Accordion title="HTML Pre-rendering">
+```php
+$html = view('admin.asistencias.reporte', compact('asistencias', 'horasFormateadas'))->render();
+$pdf = PDF::loadHTML($html);
+```
+
+Renders the view to HTML first, then converts to PDF for better performance with large datasets.
+</Accordion>
+
+## Excel Report Generation
+
+### Implementation
+
+Excel reports are generated using Maatwebsite Excel with custom styling:
+
+```php
+public function generarReporteExcel(Request $request)
+{
+    try {
+        $asistencias = $this->obtenerAsistenciasConDiasFaltantes($request);
+        $horasDecimales = $this->calcularHorasTrabajadas($asistencias);
+        $horasFormateadas = $this->formatearHoras($horasDecimales);
+        
+        return Excel::download(
+            new class($asistencias, $horasFormateadas) implements FromArray, WithHeadings, WithStyles {
+                private $asistencias;
+                private $horasFormateadas;
+                
+                public function __construct($asistencias, $horasFormateadas)
+                {
+                    $this->asistencias = $asistencias;
+                    $this->horasFormateadas = $horasFormateadas;
+                }
+                
+                public function array(): array
+                {
+                    $data = [];
+                    foreach ($this->asistencias as $asistencia) {
+                        $empleado = $asistencia->empleado ?? $asistencia;
+                        
+                        $data[] = [
+                            $empleado->id ?? '-',
+                            $empleado->nombres . ' ' . ($empleado->apellido_paterno ?? '') . ' ' . ($empleado->apellido_materno ?? ''),
+                            $empleado->departamento ?? '-',
+                            $empleado->email ?? '-',
+                            $asistencia->created_at ? $asistencia->created_at->format('d/m/Y') : '-',
+                            $asistencia->hora_entrada ? $asistencia->hora_entrada->format('H:i') : 'Sin registro',
+                            $asistencia->hora_salida ? $asistencia->hora_salida->format('H:i') : 'Sin registro',
+                            isset($asistencia->retardo) ? ($asistencia->retardo ? 'Sí' : 'No') : 'Sin registro',
+                        ];
+                    }
+                    
+                    // Add total hours row
+                    if ($this->horasFormateadas) {
+                        $data[] = ['', '', '', '', 'Total de horas trabajadas', $this->horasFormateadas . ' horas', '', ''];
+                    }
+                    
+                    return $data;
+                }
+                
+                public function headings(): array
+                {
+                    return ['N. Empleado', 'Nombre', 'Departamento', 'Correo', 'Fecha', 'Hora de entrada', 'Hora de salida', 'Retardo'];
+                }
+                
+                // ... styles method below
+            },
+            'reporte_asistencias_' . now()->format('Y-m-d') . '.xlsx'
+        );
+    } catch (\Exception $e) {
+        return redirect()->back()->with('error', 'Error al generar Excel: ' . $e->getMessage());
+    }
+}
+```
+
+### Excel Styling
+
+The Excel export includes comprehensive styling:
+
+```php
+public function styles(Worksheet $sheet)
+{
+    $highestRow = $sheet->getHighestRow();
+    
+    // Header styling - bold and gray background
+    $sheet->getStyle("A1:H1")->getFont()->setBold(true);
+    $sheet->getStyle("A1:H1")->getFill()
+        ->setFillType(Fill::FILL_SOLID)
+        ->getStartColor()->setRGB('DDDDDD');
+    
+    // Center align all cells
+    $sheet->getStyle("A1:H" . $highestRow)
+        ->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+    
+    // Add borders to all data cells
+    $sheet->getStyle("A2:H" . $highestRow)
+        ->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN);
+    
+    // Alternating row colors
+    for ($row = 2; $row <= $highestRow; $row++) {
+        if ($row % 2 == 0) {
+            $sheet->getStyle("A{$row}:H{$row}")->getFill()
+                ->setFillType(Fill::FILL_SOLID)
+                ->getStartColor()->setRGB('F9F9F9');
+        }
+    }
+    
+    // Color-code "Sin registro" in red
+    for ($row = 2; $row <= $highestRow; $row++) {
+        foreach (['F', 'G'] as $col) {  // Check-in and Check-out columns
+            $valor = $sheet->getCell("{$col}{$row}")->getValue();
+            if ($valor === 'Sin registro') {
+                $sheet->getStyle("{$col}{$row}")->getFont()->getColor()->setRGB('FF0000');
+            }
+        }
+        
+        // Color-code late status
+        $retardo = $sheet->getCell("H{$row}")->getValue();
+        if ($retardo === 'Sí') {
+            $sheet->getStyle("H{$row}")->getFont()->getColor()->setRGB('FF0000'); // Red
+        } elseif ($retardo === 'No') {
+            $sheet->getStyle("H{$row}")->getFont()->getColor()->setRGB('008000'); // Green
+        } elseif ($retardo === 'Sin registro') {
+            $sheet->getStyle("H{$row}")->getFont()->getColor()->setRGB('FF0000'); // Red
+        }
+    }
+    
+    // Bold total hours row
+    $sheet->getStyle("E{$highestRow}:F{$highestRow}")->getFont()->setBold(true);
+}
+```
+
+<CardGroup cols={3}>
+  <Card title="Header Styling" icon="heading">
+    Bold text with gray background (#DDDDDD)
+  </Card>
+  <Card title="Alternating Rows" icon="bars">
+    Light gray (#F9F9F9) for even rows
+  </Card>
+  <Card title="Color Coding" icon="palette">
+    Red for late/missing, green for on-time
+  </Card>
+</CardGroup>
+
+## Hours Calculation
+
+### Calculation Logic
+
+The system calculates total hours worked only for single-employee reports:
+
+```php
+private function calcularHorasTrabajadas($asistencias)
+{
+    $horasTotales = null;
+    
+    if ($asistencias->count() > 0) {
+        $empleadoIds = $asistencias->pluck('empleado_id')->unique();
+        
+        // Only calculate for single employee
+        if ($empleadoIds->count() === 1) {
+            $horasTotales = 0;
+            
+            foreach ($asistencias as $asistencia) {
+                if ($asistencia->hora_entrada && $asistencia->hora_salida) {
+                    try {
+                        $entrada = Carbon::parse($asistencia->hora_entrada);
+                        $salida = Carbon::parse($asistencia->hora_salida);
+                        
+                        if ($salida->gte($entrada)) {
+                            $diffInMinutes = $salida->diffInMinutes($entrada);
+                        } else {
+                            // Shift crosses midnight
+                            $diffInMinutes = $salida->addDay()->diffInMinutes($entrada);
+                        }
+                        
+                        $horasTotales += $diffInMinutes / 60;
+                    } catch (\Exception $e) {
+                        continue;
+                    }
+                }
+            }
+            
+            $horasTotales = round($horasTotales, 2);
+        }
+    }
+    
+    return $horasTotales;
+}
+```
+
+<Info>
+Hours calculation handles shifts that cross midnight by adding a day to the check-out time when it's earlier than check-in.
+</Info>
+
+### Hours Formatting
+
+Decimal hours are converted to human-readable format:
+
+```php
+private function formatearHoras($horasDecimales)
+{
+    if ($horasDecimales === null) {
+        return null;
+    }
+    
+    $horas = floor(abs($horasDecimales));
+    $minutos = round((abs($horasDecimales) - $horas) * 60);
+    
+    return "{$horas}h {$minutos}min";
+}
+```
+
+**Example conversions:**
+- `8.5` hours → `"8h 30min"`
+- `7.75` hours → `"7h 45min"`
+- `40.25` hours → `"40h 15min"`
+
+## Filtering and Date Ranges
+
+### Obtaining Attendance with Missing Days
+
+The system fills in missing days to create complete reports:
+
+```php
+private function obtenerAsistenciasConDiasFaltantes(Request $request)
+{
+    $fechaInicio = $request->filled('fecha_inicio')
+        ? Carbon::parse($request->fecha_inicio)
+        : Carbon::today();
+    
+    $fechaFin = $request->filled('fecha_fin')
+        ? Carbon::parse($request->fecha_fin)
+        : Carbon::today();
+    
+    // 1. Filter employees first
+    $empleadosQuery = Empleado::query();
+    
+    if ($request->filled('departamento')) {
+        $empleadosQuery->where('departamento', $request->departamento);
+    }
+    
+    if ($request->filled('buscar')) {
+        $buscar = strtolower($request->buscar);
+        $empleadosQuery->where(function ($q) use ($buscar) {
+            $q->whereRaw('LOWER(nombres) LIKE ?', ["%$buscar%"])
+                ->orWhereRaw('LOWER(apellido_paterno) LIKE ?', ["%$buscar%"])
+                ->orWhereRaw('LOWER(apellido_materno) LIKE ?', ["%$buscar%"])
+                ->orWhereRaw('LOWER(id) LIKE ?', ["%$buscar%"]);
+        });
+    }
+    
+    $empleados = $empleadosQuery->get();
+    
+    // 2. Get all attendance records in range
+    $asistencias = Asistencia::with('empleado')
+        ->whereBetween('created_at', [$fechaInicio->startOfDay(), $fechaFin->endOfDay()])
+        ->get()
+        ->groupBy(fn($a) => $a->empleado_id . '_' . $a->created_at->format('Y-m-d'));
+    
+    $periodo = CarbonPeriod::create($fechaInicio, $fechaFin);
+    $resultado = collect();
+    
+    // 3. Loop through employees and dates
+    foreach ($empleados as $empleado) {
+        foreach ($periodo as $fecha) {
+            $key = $empleado->id . '_' . $fecha->format('Y-m-d');
+            
+            if (isset($asistencias[$key])) {
+                $resultado->push($asistencias[$key]->first());
+            } else {
+                // Virtual record for missing attendance
+                $resultado->push((object)[
+                    'empleado'      => $empleado,
+                    'empleado_id'   => $empleado->id,
+                    'created_at'    => $fecha->copy(),
+                    'hora_entrada'  => null,
+                    'hora_salida'   => null,
+                    'retardo'       => null,
+                ]);
+            }
+        }
+    }
+    
+    // Apply additional filters...
+    return $resultado;
+}
+```
+
+<Warning>
+The system creates "virtual" attendance records for missing days. These have null values for check-in, check-out, and late status.
+</Warning>
+
+### Available Filters
+
+The reporting system supports multiple filter types:
+
+<Accordion title="Date Range Filter">
+```php
+$fechaInicio = $request->filled('fecha_inicio')
+    ? Carbon::parse($request->fecha_inicio)
+    : Carbon::today();
+
+$fechaFin = $request->filled('fecha_fin')
+    ? Carbon::parse($request->fecha_fin)
+    : Carbon::today();
+```
+
+Defaults to today if not specified.
+</Accordion>
+
+<Accordion title="Department Filter">
+```php
+if ($request->filled('departamento')) {
+    $empleadosQuery->where('departamento', $request->departamento);
+}
+```
+
+Filters employees by department before generating report.
+</Accordion>
+
+<Accordion title="Search Filter">
+```php
+if ($request->filled('buscar')) {
+    $buscar = strtolower($request->buscar);
+    $empleadosQuery->where(function ($q) use ($buscar) {
+        $q->whereRaw('LOWER(nombres) LIKE ?', ["%$buscar%"])
+            ->orWhereRaw('LOWER(apellido_paterno) LIKE ?', ["%$buscar%"])
+            ->orWhereRaw('LOWER(apellido_materno) LIKE ?', ["%$buscar%"])
+            ->orWhereRaw('LOWER(id) LIKE ?', ["%$buscar%"]);
+    });
+}
+```
+
+Searches by employee name or ID.
+</Accordion>
+
+<Accordion title="Late Status Filter">
+```php
+if ($request->filled('retardo')) {
+    $retardo = (string) $request->retardo;
+    $resultado = $resultado->filter(function ($item) use ($retardo) {
+        if ($item->retardo === null) {
+            return false;  // Exclude virtual records
+        }
+        return (string) $item->retardo === $retardo;
+    })->values();
+}
+```
+
+Filters by late status: "1" for late, "0" for on-time.
+</Accordion>
+
+<Accordion title="Check-In Filter">
+```php
+if ($request->filled('hora_entrada')) {
+    $horaEntradaFiltro = $request->hora_entrada;
+    $resultado = $resultado->filter(function ($item) use ($horaEntradaFiltro) {
+        return $horaEntradaFiltro === "1" 
+            ? $item->hora_entrada !== null 
+            : $item->hora_entrada === null;
+    })->values();
+}
+```
+
+Filters by presence/absence of check-in: "1" for has check-in, "0" for missing.
+</Accordion>
+
+<Accordion title="Check-Out Filter">
+```php
+if ($request->filled('hora_salida')) {
+    $horaSalidaFiltro = $request->hora_salida;
+    $resultado = $resultado->filter(function ($item) use ($horaSalidaFiltro) {
+        return $horaSalidaFiltro === "1" 
+            ? $item->hora_salida !== null 
+            : $item->hora_salida === null;
+    })->values();
+}
+```
+
+Filters by presence/absence of check-out: "1" for has check-out, "0" for missing.
+</Accordion>
+
+### Filter Detection
+
+The system detects if any filters are active:
+
+```php
+private function hayFiltros(Request $request): bool
+{
+    return $request->filled('buscar')
+        || $request->filled('fecha_inicio')
+        || $request->filled('fecha_fin')
+        || $request->filled('departamento')
+        || $request->filled('hora_entrada')
+        || $request->filled('hora_salida')
+        || $request->filled('retardo');
+}
+```
+
+## Report Columns
+
+Both PDF and Excel reports include the following columns:
+
+| Column | Data Type | Description |
+|--------|-----------|-------------|
+| **N. Empleado** | Integer | Employee ID number |
+| **Nombre** | String | Full name (nombres + apellido_paterno + apellido_materno) |
+| **Departamento** | String | Department name |
+| **Correo** | Email | Employee email address |
+| **Fecha** | Date | Attendance date (d/m/Y format) |
+| **Hora de entrada** | Time | Check-in time (H:i format) or "Sin registro" |
+| **Hora de salida** | Time | Check-out time (H:i format) or "Sin registro" |
+| **Retardo** | Boolean | "Sí", "No", or "Sin registro" |
+
+<Note>
+For single-employee reports, an additional row shows "Total de horas trabajadas" with the calculated hours.
+</Note>
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Memory Management" icon="memory">
+    For reports with thousands of records, consider increasing memory limits and using streaming.
+  </Card>
+  <Card title="Date Range Selection" icon="calendar-range">
+    Always provide date range options to users. Default to current day for quick access.
+  </Card>
+  <Card title="Filter Combinations" icon="filter">
+    Test various filter combinations to ensure accurate results, especially with virtual records.
+  </Card>
+  <Card title="Hours Calculation" icon="calculator">
+    Only calculate hours for single-employee reports to avoid confusion in multi-employee reports.
+  </Card>
+</CardGroup>
+
+## Related Resources
+
+<CardGroup cols={2}>
+  <Card title="Attendance Tracking" icon="clock" href="/features/attendance-tracking">
+    Learn how attendance data is collected
+  </Card>
+  <Card title="Employee Management" icon="users" href="/features/employee-management">
+    Understand employee data structure
+  </Card>
+</CardGroup>

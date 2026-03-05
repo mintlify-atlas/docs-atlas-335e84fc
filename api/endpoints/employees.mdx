@@ -1,0 +1,470 @@
+---
+title: 'Employee Endpoints'
+description: 'Complete API reference for managing employees in ChecadorCumbres'
+---
+
+## Overview
+
+The employee endpoints allow administrators to manage employee records, including creating, reading, updating, and deleting employee information. All endpoints require authentication.
+
+## List Employees
+
+<CodeGroup>
+```http GET /admin/empleados
+GET /admin/empleados?buscar=Juan&page=1
+Authorization: Bearer {token}
+```
+</CodeGroup>
+
+Retrieves a paginated list of employees with optional search and filtering.
+
+### Authentication
+Required. User must be authenticated via Laravel session.
+
+### Query Parameters
+
+<ParamField query="buscar" type="string">
+  Search term to filter employees by name, last name, department, or employee ID. Case-insensitive.
+</ParamField>
+
+<ParamField query="page" type="integer" default="1">
+  Page number for pagination (10 items per page).
+</ParamField>
+
+### Response
+
+Returns an HTML view with employee data and department statistics.
+
+<ResponseField name="empleados" type="object">
+  Paginated collection of employees
+  <Expandable title="properties">
+    <ResponseField name="data" type="array">
+      Array of employee objects
+      <Expandable title="employee object">
+        <ResponseField name="id" type="integer">
+          Employee number (primary key)
+        </ResponseField>
+        <ResponseField name="nombres" type="string">
+          Employee first name(s)
+        </ResponseField>
+        <ResponseField name="apellido_paterno" type="string">
+          Employee paternal last name
+        </ResponseField>
+        <ResponseField name="apellido_materno" type="string">
+          Employee maternal last name
+        </ResponseField>
+        <ResponseField name="departamento" type="string">
+          Department name (preescolar, primaria, secundaria, administracion, academia, promocion, mantenimiento, direccion)
+        </ResponseField>
+        <ResponseField name="puesto" type="string">
+          Employee position/job title
+        </ResponseField>
+        <ResponseField name="email" type="string">
+          Employee email address
+        </ResponseField>
+        <ResponseField name="tipo_horario" type="string">
+          Schedule type (e.g., "horario base", "horario libre")
+        </ResponseField>
+        <ResponseField name="foto" type="string|null">
+          Photo filename (stored in public/img/empleados/)
+        </ResponseField>
+        <ResponseField name="created_at" type="datetime">
+          Creation timestamp
+        </ResponseField>
+        <ResponseField name="updated_at" type="datetime">
+          Last update timestamp
+        </ResponseField>
+      </Expandable>
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="preescolarCount" type="integer">
+  Number of preschool department employees
+</ResponseField>
+
+<ResponseField name="primariaCount" type="integer">
+  Number of elementary department employees
+</ResponseField>
+
+<ResponseField name="secundariaCount" type="integer">
+  Number of secondary department employees
+</ResponseField>
+
+<ResponseField name="administrativosCount" type="integer">
+  Number of administrative employees
+</ResponseField>
+
+<ResponseField name="academiasCount" type="integer">
+  Number of academy employees
+</ResponseField>
+
+<ResponseField name="promocionCount" type="integer">
+  Number of promotion department employees
+</ResponseField>
+
+<ResponseField name="mantenimientoCount" type="integer">
+  Number of maintenance employees
+</ResponseField>
+
+<ResponseField name="direccionCount" type="integer">
+  Number of management employees
+</ResponseField>
+
+<ResponseField name="totales_empleados" type="integer">
+  Total number of employees
+</ResponseField>
+
+### Error Responses
+
+<ResponseField name="error" type="string">
+  Error message if the operation fails
+</ResponseField>
+
+<CodeGroup>
+```json 500 Internal Server Error
+{
+  "error": "Error al cargar la página de empleados: Database connection failed"
+}
+```
+</CodeGroup>
+
+---
+
+## Get Create Form
+
+<CodeGroup>
+```http GET /admin/empleados/crear
+GET /admin/empleados/crear
+Authorization: Bearer {token}
+```
+</CodeGroup>
+
+Displays the employee creation form.
+
+### Authentication
+Required. User must be authenticated.
+
+### Response
+
+Returns an HTML view with the employee creation form.
+
+---
+
+## Create Employee
+
+<CodeGroup>
+```http POST /admin/empleados
+POST /admin/empleados
+Content-Type: multipart/form-data
+Authorization: Bearer {token}
+
+id=12345&nombres=Juan&apellido_paterno=Garcia&apellido_materno=Lopez&departamento=primaria&puesto=Maestro&email=juan@example.com&tipo_horario=horario base&foto=@file
+```
+</CodeGroup>
+
+Creates a new employee record.
+
+### Authentication
+Required. User must be authenticated.
+
+### Request Body
+
+<ParamField body="id" type="integer" required>
+  Employee number (must be unique)
+</ParamField>
+
+<ParamField body="nombres" type="string" required>
+  Employee first name(s)
+</ParamField>
+
+<ParamField body="apellido_paterno" type="string" required>
+  Employee paternal last name
+</ParamField>
+
+<ParamField body="apellido_materno" type="string" required>
+  Employee maternal last name
+</ParamField>
+
+<ParamField body="departamento" type="string" required>
+  Department name
+</ParamField>
+
+<ParamField body="puesto" type="string" required>
+  Job position/title
+</ParamField>
+
+<ParamField body="email" type="string" required>
+  Valid email address with valid MX records. Must be unique.
+</ParamField>
+
+<ParamField body="tipo_horario" type="string" required>
+  Schedule type (e.g., "horario base", "horario libre")
+</ParamField>
+
+<ParamField body="foto" type="file" optional>
+  Employee photo. Accepted formats: jpeg, png, jpg, gif. Max size: 2MB.
+</ParamField>
+
+### Response
+
+<CodeGroup>
+```json 302 Redirect (Success)
+Location: /admin/empleados
+Session: success = "Empleado creado correctamente."
+```
+
+```json 302 Redirect (Error)
+Location: /admin/empleados
+Session: error = "Error al guardar empleado: {error_message}"
+```
+
+```json 422 Validation Error
+{
+  "message": "The given data was invalid.",
+  "errors": {
+    "id": ["The id has already been taken."],
+    "email": ["El dominio del correo electrónico no es válido."]
+  }
+}
+```
+</CodeGroup>
+
+---
+
+## Get Edit Form
+
+<CodeGroup>
+```http GET /admin/empleados/{id}/editar
+GET /admin/empleados/12345/editar
+Authorization: Bearer {token}
+```
+</CodeGroup>
+
+Displays the employee edit form.
+
+### Authentication
+Required. User must be authenticated.
+
+### Path Parameters
+
+<ParamField path="id" type="integer" required>
+  Employee ID to edit
+</ParamField>
+
+### Response
+
+Returns an HTML view with the employee edit form and current employee data.
+
+### Error Responses
+
+<CodeGroup>
+```json 404 Not Found
+Location: previous page
+Session: error = "Error al editar empleado: No query results for model [App\\Models\\Empleado]"
+```
+</CodeGroup>
+
+---
+
+## Update Employee
+
+<CodeGroup>
+```http PUT /admin/empleados/{id}
+PUT /admin/empleados/12345
+Content-Type: multipart/form-data
+Authorization: Bearer {token}
+
+id=12345&nombres=Juan Carlos&apellido_paterno=Garcia&apellido_materno=Lopez&departamento=secundaria&puesto=Maestro Senior&email=juan@example.com&tipo_horario=horario libre&foto=@newfile
+```
+</CodeGroup>
+
+Updates an existing employee record.
+
+### Authentication
+Required. User must be authenticated.
+
+### Path Parameters
+
+<ParamField path="id" type="integer" required>
+  Employee ID to update
+</ParamField>
+
+### Request Body
+
+<ParamField body="id" type="integer" required>
+  Employee number (can be changed)
+</ParamField>
+
+<ParamField body="nombres" type="string" required>
+  Employee first name(s)
+</ParamField>
+
+<ParamField body="apellido_paterno" type="string" required>
+  Employee paternal last name
+</ParamField>
+
+<ParamField body="apellido_materno" type="string" required>
+  Employee maternal last name
+</ParamField>
+
+<ParamField body="departamento" type="string" required>
+  Department name
+</ParamField>
+
+<ParamField body="puesto" type="string" required>
+  Job position/title
+</ParamField>
+
+<ParamField body="email" type="string" required>
+  Valid email address. Must be unique (except for current employee).
+</ParamField>
+
+<ParamField body="tipo_horario" type="string" required>
+  Schedule type
+</ParamField>
+
+<ParamField body="foto" type="file" optional>
+  New employee photo. If provided, replaces the existing photo. Accepted formats: jpeg, png, jpg, gif. Max size: 2MB.
+</ParamField>
+
+### Response
+
+<CodeGroup>
+```json 302 Redirect (Success)
+Location: /admin/empleados
+Session: success = "Empleado actualizado."
+```
+
+```json 302 Redirect (Error)
+Location: previous page
+Session: error = "Error al actualizar empleado: {error_message}"
+```
+
+```json 422 Validation Error
+{
+  "message": "The given data was invalid.",
+  "errors": {
+    "email": ["The email has already been taken."]
+  }
+}
+```
+</CodeGroup>
+
+### Notes
+
+- If a new photo is uploaded, the old photo file is automatically deleted from the server
+- The photo is stored with a UUID filename to prevent conflicts
+
+---
+
+## Delete Employee
+
+<CodeGroup>
+```http DELETE /admin/empleados/{id}
+DELETE /admin/empleados/12345
+Authorization: Bearer {token}
+```
+</CodeGroup>
+
+Deletes an employee record and associated photo.
+
+### Authentication
+Required. User must be authenticated.
+
+### Path Parameters
+
+<ParamField path="id" type="integer" required>
+  Employee ID to delete
+</ParamField>
+
+### Response
+
+<CodeGroup>
+```json 302 Redirect (Success)
+Location: previous page
+Session: success = "Empleado eliminado correctamente."
+```
+
+```json 302 Redirect (Error)
+Location: previous page
+Session: error = "Error al eliminar al empleado: {error_message}"
+```
+
+```json 404 Not Found
+Location: previous page
+Session: error = "Error al eliminar al empleado: No query results for model [App\\Models\\Empleado]"
+```
+</CodeGroup>
+
+### Notes
+
+- Deleting an employee also deletes their photo file from the server if it exists
+- Related attendance records are preserved (soft delete behavior)
+
+---
+
+## Code Examples
+
+### Create Employee with cURL
+
+<CodeGroup>
+```bash cURL
+curl -X POST https://your-domain.com/admin/empleados \
+  -H "Cookie: laravel_session=your-session-cookie" \
+  -F "id=12345" \
+  -F "nombres=Juan Carlos" \
+  -F "apellido_paterno=Garcia" \
+  -F "apellido_materno=Lopez" \
+  -F "departamento=primaria" \
+  -F "puesto=Maestro" \
+  -F "email=juan.garcia@school.edu.mx" \
+  -F "tipo_horario=horario base" \
+  -F "foto=@/path/to/photo.jpg"
+```
+
+```php PHP
+$client = new \GuzzleHttp\Client();
+
+$response = $client->post('https://your-domain.com/admin/empleados', [
+    'multipart' => [
+        ['name' => 'id', 'contents' => '12345'],
+        ['name' => 'nombres', 'contents' => 'Juan Carlos'],
+        ['name' => 'apellido_paterno', 'contents' => 'Garcia'],
+        ['name' => 'apellido_materno', 'contents' => 'Lopez'],
+        ['name' => 'departamento', 'contents' => 'primaria'],
+        ['name' => 'puesto', 'contents' => 'Maestro'],
+        ['name' => 'email', 'contents' => 'juan.garcia@school.edu.mx'],
+        ['name' => 'tipo_horario', 'contents' => 'horario base'],
+        [
+            'name' => 'foto',
+            'contents' => fopen('/path/to/photo.jpg', 'r'),
+            'filename' => 'photo.jpg'
+        ],
+    ],
+    'cookies' => $cookieJar
+]);
+```
+
+```javascript JavaScript (Axios)
+const FormData = require('form-data');
+const fs = require('fs');
+const axios = require('axios');
+
+const formData = new FormData();
+formData.append('id', '12345');
+formData.append('nombres', 'Juan Carlos');
+formData.append('apellido_paterno', 'Garcia');
+formData.append('apellido_materno', 'Lopez');
+formData.append('departamento', 'primaria');
+formData.append('puesto', 'Maestro');
+formData.append('email', 'juan.garcia@school.edu.mx');
+formData.append('tipo_horario', 'horario base');
+formData.append('foto', fs.createReadStream('/path/to/photo.jpg'));
+
+const response = await axios.post('https://your-domain.com/admin/empleados', formData, {
+  headers: formData.getHeaders(),
+  withCredentials: true
+});
+```
+</CodeGroup>

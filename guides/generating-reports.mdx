@@ -1,0 +1,374 @@
+---
+title: Generating Reports
+description: Learn how to generate, export, and analyze attendance reports in PDF and Excel formats
+---
+
+ChecadorCumbres provides powerful reporting features that allow you to generate detailed attendance reports in both PDF and Excel formats. Reports can be filtered by date range, department, and various attendance criteria.
+
+## Accessing Report Generation
+
+Reports are generated directly from the admin dashboard at `/admin/asistencias`. The report generation buttons are located above the attendance table.
+
+```php
+Route::get('/asistencias/reporte/pdf', [AdminController::class, 'generarReporte'])
+    ->name('admin.asistencias.reporte.pdf');
+
+Route::get('/asistencias/reporte/excel', [AdminController::class, 'generarReporteExcel'])
+    ->name('admin.asistencias.reporte.excel');
+```
+
+## Report Types
+
+ChecadorCumbres supports two report formats:
+
+<Tabs>
+  <Tab title="PDF Reports">
+    PDF reports provide a professional, printable format ideal for:
+    - Official documentation
+    - Archival purposes
+    - Presentations to management
+    - Physical distribution
+
+    Click the **Crear reporte** (Create report) button to generate a PDF.
+  </Tab>
+
+  <Tab title="Excel Reports">
+    Excel reports offer spreadsheet format ideal for:
+    - Further data analysis
+    - Creating custom charts and graphs
+    - Importing into other systems
+    - Performing calculations
+
+    Click the **Exportar Excel** (Export Excel) button to download an XLSX file.
+  </Tab>
+</Tabs>
+
+## Generating a Report
+
+<Steps>
+  <Step title="Apply Filters (Optional)">
+    Before generating a report, you can apply filters to narrow down the data. All filters set in the dashboard are automatically included in the report:
+
+    - **Buscar**: Search by employee name or number
+    - **Fecha inicio**: Start date of the reporting period
+    - **Fecha fin**: End date of the reporting period
+    - **Departamento**: Filter by specific department
+    - **Retardo**: Filter by tardiness status
+    - **Hora de entrada**: Filter by check-in status
+    - **Hora de salida**: Filter by check-out status
+
+    <Note>
+    If you don't apply any filters, the report will show today's attendance records.
+    </Note>
+  </Step>
+
+  <Step title="Choose Report Format">
+    Select your desired format:
+    - **Crear reporte**: Opens PDF in a new browser tab
+    - **Exportar Excel**: Downloads an XLSX file to your computer
+  </Step>
+
+  <Step title="Wait for Generation">
+    The system processes your request. For large date ranges (more than a week), report generation may take a few seconds.
+
+    ```php
+    // System increases memory and time limits for large reports
+    ini_set('memory_limit', '1024M');
+    set_time_limit(300);
+    ```
+  </Step>
+
+  <Step title="View or Download Report">
+    - **PDF**: Opens in a new browser tab. You can view, print, or save it.
+    - **Excel**: Downloads automatically with filename format: `reporte_asistencias_YYYY-MM-DD.xlsx`
+  </Step>
+</Steps>
+
+## Understanding Report Contents
+
+### Report Columns
+
+Both PDF and Excel reports include the following columns:
+
+| Column | Description | Example |
+|--------|-------------|----------|
+| **N. Empleado** | Employee number | 12345 |
+| **Nombre** | Full name (first + paternal + maternal) | Juan García López |
+| **Departamento** | Employee's department | Primaria |
+| **Correo** | Employee's email address | [email protected] |
+| **Fecha** | Date of attendance record | 05/03/2026 |
+| **Hora de entrada** | Check-in time (or "Sin registro") | 07:30 / Sin registro |
+| **Hora de salida** | Check-out time (or "Sin registro") | 15:45 / Sin registro |
+| **Retardo** | Late status (Sí, No, or Sin registro) | Sí / No |
+
+<Warning>
+"Sin registro" (No record) indicates missing data:
+- Missing check-in time means the employee didn't check in
+- Missing check-out time means the employee hasn't left yet or forgot to check out
+- Missing retardo means there's no attendance record at all
+</Warning>
+
+### Hours Worked Calculation
+
+When your report filters result in a **single employee**, the system automatically calculates total hours worked:
+
+```php
+private function calcularHorasTrabajadas($asistencias) {
+    // Only calculate if viewing a single employee
+    if ($empleadoIds->count() === 1) {
+        foreach ($asistencias as $asistencia) {
+            if ($asistencia->hora_entrada && $asistencia->hora_salida) {
+                $entrada = Carbon::parse($asistencia->hora_entrada);
+                $salida = Carbon::parse($asistencia->hora_salida);
+                $diffInMinutes = $salida->diffInMinutes($entrada);
+                $horasTotales += $diffInMinutes / 60;
+            }
+        }
+    }
+}
+```
+
+The total hours worked appears at the bottom of the report in the format: **"Xh Ymin"** (e.g., "40h 30min").
+
+<Note>
+Hours worked calculation accounts for overnight shifts. If check-out time is before check-in time, the system assumes the shift continued into the next day.
+</Note>
+
+## Filtering Reports by Date Range
+
+To generate reports for specific periods:
+
+<Steps>
+  <Step title="Set Start Date">
+    Enter the **Fecha inicio** (start date) in the date picker. This is the first day you want to include in the report.
+  </Step>
+
+  <Step title="Set End Date">
+    Enter the **Fecha fin** (end date). This is the last day to include in the report.
+  </Step>
+
+  <Step title="Click Filtrar">
+    Apply the filters to see the data range in the dashboard.
+  </Step>
+
+  <Step title="Generate Report">
+    Click either **Crear reporte** or **Exportar Excel** to generate the report with your selected date range.
+  </Step>
+</Steps>
+
+<Warning>
+**Important Date Range Behavior**
+
+When you specify a date range, the system generates records for **every day in the range** for **every employee** matching your filters. If an employee has no attendance record for a specific day, the report shows:
+
+- Hora de entrada: Sin registro (red text)
+- Hora de salida: Sin registro (red text)
+- Retardo: Sin registro (red text)
+
+This provides a complete view of attendance patterns, including absences.
+</Warning>
+
+## Filtering by Department
+
+To generate department-specific reports:
+
+<Steps>
+  <Step title="Select Department">
+    Choose a department from the **Departamento** dropdown:
+    - Academia
+    - Administración
+    - Dirección
+    - Preescolar
+    - Primaria
+    - Promoción
+    - Secundaria
+    - Mantenimiento
+  </Step>
+
+  <Step title="Add Date Range (Optional)">
+    Combine with date filters to get department attendance for a specific period.
+  </Step>
+
+  <Step title="Generate Report">
+    Click your desired report format button. The report will only include employees from the selected department.
+  </Step>
+</Steps>
+
+## Understanding Report Metrics
+
+### Tardiness Analysis
+
+The **Retardo** column shows whether an employee arrived late:
+
+- **Sí** (Yes, in red): Arrived after the configured entry time limit
+- **No** (No, in green): Arrived on time
+- **Sin registro** (No record, in red): No attendance record exists
+
+<Note>
+Tardiness only applies to employees with "Horario Base" (base schedule). Employees with "Horario Libre" (flexible schedule) are never marked as late.
+</Note>
+
+### Hours Worked Metrics
+
+The hours worked metric appears at the bottom of single-employee reports and shows:
+
+- Total hours worked across all days in the report
+- Formatted as hours and minutes (e.g., "42h 15min")
+- Only includes complete check-in/check-out pairs
+
+**Calculation Logic:**
+```php
+$entrada = Carbon::parse($asistencia->hora_entrada);
+$salida = Carbon::parse($asistencia->hora_salida);
+
+if ($salida->gte($entrada)) {
+    $diffInMinutes = $salida->diffInMinutes($entrada);
+} else {
+    // Handle overnight shifts
+    $diffInMinutes = $salida->addDay()->diffInMinutes($entrada);
+}
+
+$horasTotales += $diffInMinutes / 60;
+```
+
+## Excel Report Features
+
+Excel reports include advanced formatting for better readability:
+
+### Visual Formatting
+
+<div className="grid grid-cols-1 md:grid-cols-2 gap-4 my-6">
+  <div>
+    **Header Styling**
+    - Bold text
+    - Gray background (#DDDDDD)
+    - Centered alignment
+  </div>
+  <div>
+    **Alternating Row Colors**
+    - Even rows: Light gray (#F9F9F9)
+    - Odd rows: White
+  </div>
+  <div>
+    **Color-Coded Status**
+    - "Sin registro": Red text (#FF0000)
+    - "Sí" (Late): Red text (#FF0000)
+    - "No" (On time): Green text (#008000)
+  </div>
+  <div>
+    **Borders**
+    - Thin borders around all data cells
+    - Clean, professional appearance
+  </div>
+</div>
+
+### Excel Styling Code
+
+```php
+public function styles(Worksheet $sheet) {
+    // Header styling
+    $sheet->getStyle("A1:H1")->getFont()->setBold(true);
+    $sheet->getStyle("A1:H1")->getFill()
+        ->setFillType(Fill::FILL_SOLID)
+        ->getStartColor()->setRGB('DDDDDD');
+    
+    // Alternating row colors
+    for ($row = 2; $row <= $highestRow; $row++) {
+        if ($row % 2 == 0) {
+            $sheet->getStyle("A{$row}:H{$row}")->getFill()
+                ->setFillType(Fill::FILL_SOLID)
+                ->getStartColor()->setRGB('F9F9F9');
+        }
+    }
+    
+    // Color-code missing records and tardiness
+    if ($valor === 'Sin registro') {
+        $sheet->getStyle("{$col}{$row}")->getFont()
+            ->getColor()->setRGB('FF0000');
+    }
+}
+```
+
+## PDF Report Configuration
+
+PDF reports are generated with the following specifications:
+
+- **Paper Size**: A4
+- **Orientation**: Landscape (horizontal)
+- **Engine**: DomPDF with HTML5 parser
+- **Memory Limit**: 1024MB for large reports
+- **Execution Time**: 300 seconds (5 minutes) maximum
+
+```php
+$pdf = PDF::loadHTML($html)
+    ->setPaper('A4', 'landscape')
+    ->setOption('isHtml5ParserEnabled', true)
+    ->setOption('isRemoteEnabled', true);
+```
+
+## Report Generation Tips
+
+<Accordion title="How do I generate a weekly attendance report?">
+  <Steps>
+    <Step>Set **Fecha inicio** to the Monday of the desired week</Step>
+    <Step>Set **Fecha fin** to the Sunday of that week</Step>
+    <Step>Leave other filters empty to include all employees</Step>
+    <Step>Click **Exportar Excel** for easy analysis</Step>
+  </Steps>
+
+  The report will show 7 days × number of employees rows, including absences.
+</Accordion>
+
+<Accordion title="How do I track an individual employee's hours?">
+  <Steps>
+    <Step>Enter the employee's name or number in the **Buscar** field</Step>
+    <Step>Set your desired date range</Step>
+    <Step>Click **Crear reporte**</Step>
+  </Steps>
+
+  The PDF will display the employee's daily attendance and total hours worked at the bottom.
+</Accordion>
+
+<Accordion title="How do I find who was late this week?">
+  <Steps>
+    <Step>Set **Fecha inicio** to Monday and **Fecha fin** to Friday</Step>
+    <Step>Set **Retardo** to "Sí"</Step>
+    <Step>Click **Filtrar** to apply</Step>
+    <Step>Generate your report</Step>
+  </Steps>
+
+  The report will only show employees who were marked as late during the week.
+</Accordion>
+
+<Accordion title="Why is my report taking a long time to generate?">
+  Large date ranges with many employees can take longer to process. For example, a monthly report for 100 employees generates approximately 3,000 rows (30 days × 100 employees).
+
+  To speed up report generation:
+  - Narrow your date range
+  - Filter by specific department
+  - Use Excel format (slightly faster than PDF)
+
+  The system has a 5-minute timeout, which is sufficient for most reports.
+</Accordion>
+
+<Accordion title="Can I schedule automatic reports?">
+  ChecadorCumbres includes a weekly tardiness report that can be automatically emailed. This is configured through Laravel's task scheduling:
+
+  ```php
+  php artisan schedule:work
+  ```
+
+  Contact your system administrator to enable automated report emails using the `EnviarReporteRetardosSemanales` command.
+</Accordion>
+
+## Best Practices for Report Generation
+
+1. **Regular Monitoring**: Generate weekly reports to track attendance trends
+2. **Department Reviews**: Monthly department-specific reports help identify department-wide patterns
+3. **Individual Analysis**: Use single-employee reports for performance reviews or HR documentation
+4. **Excel for Analysis**: Use Excel reports when you need to create charts, pivot tables, or perform calculations
+5. **PDF for Distribution**: Use PDF reports for sharing with management or including in official documentation
+
+<Note>
+All reports preserve the exact state of the attendance data at the time of generation. They provide a point-in-time snapshot that can be used for historical reference.
+</Note>

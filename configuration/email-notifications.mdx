@@ -1,0 +1,402 @@
+---
+title: Email Notifications
+description: Configure email notifications for weekly tardiness reports
+---
+
+## Overview
+
+ChecadorCumbres includes an automated email notification system that sends weekly tardiness reports to designated administrators. The system tracks employee late check-ins and absences, generating PDF reports automatically.
+
+## Mail Configuration
+
+Email functionality is configured through environment variables and the `config/mail.php` configuration file.
+
+### Environment Variables
+
+Set these variables in your `.env` file:
+
+```env
+MAIL_MAILER=smtp
+MAIL_HOST=smtp.gmail.com
+MAIL_PORT=587
+MAIL_USERNAME=your_email@example.com
+MAIL_PASSWORD=your_app_password
+MAIL_FROM_ADDRESS=noreply@checador.example.com
+MAIL_FROM_NAME="ChecadorCumbres System"
+```
+
+### Supported Mail Drivers
+
+From `config/mail.php:17-35`:
+
+- **SMTP**: Standard SMTP server (Gmail, SendGrid, etc.)
+- **Sendmail**: Local sendmail binary
+- **Mailgun**: Mailgun API
+- **SES**: Amazon Simple Email Service
+- **Postmark**: Postmark API
+- **Resend**: Resend API
+- **Log**: Write emails to log file (development only)
+- **Array**: Store emails in memory (testing only)
+
+### SMTP Configuration
+
+Most common configuration for production:
+
+```php
+'smtp' => [
+    'transport' => 'smtp',
+    'scheme' => env('MAIL_SCHEME'),
+    'url' => env('MAIL_URL'),
+    'host' => env('MAIL_HOST', '127.0.0.1'),
+    'port' => env('MAIL_PORT', 2525),
+    'username' => env('MAIL_USERNAME'),
+    'password' => env('MAIL_PASSWORD'),
+    'timeout' => null,
+],
+```
+
+### Development Configuration
+
+For local development, use the log driver:
+
+```env
+MAIL_MAILER=log
+```
+
+Emails will be written to `storage/logs/laravel.log` instead of being sent.
+
+## User Notification Preferences
+
+Users can opt-in to receive weekly tardiness reports through the `yes_notifications` field.
+
+### Database Schema
+
+From `database/migrations/0001_01_01_000000_create_users_table.php:21`:
+
+```php
+$table->boolean('yes_notifications')->default(false);
+```
+
+### Enabling Notifications
+
+Administrators can enable notifications when creating or editing users.
+
+**Controller:** `app/Http/Controllers/UsuarioController.php:44-56`
+
+```php
+$request->validate([
+    'name' => 'required',
+    'last_name' => 'required',
+    'email' => 'required|email|unique:users',
+    'password' => 'required|min:6',
+    'level_user' => 'required|integer|in:0,1,2',
+    'yes_notifications' => 'nullable|boolean',
+]);
+
+User::create([
+    'name' => $request->name,
+    'last_name' => $request->last_name,
+    'email' => $request->email,
+    'password' => Hash::make($request->password),
+    'level_user' => $request->level_user,
+    'yes_notifications' => $request->yes_notifications ?? false,
+]);
+```
+
+<Note>
+Only users with `yes_notifications = true` will receive weekly reports.
+</Note>
+
+## Weekly Tardiness Report Command
+
+The system includes an Artisan command that generates and sends weekly tardiness reports.
+
+### Command Overview
+
+**File:** `app/Console/Commands/EnviarReporteRetardosSemanales.php`
+
+```php
+protected $signature = 'app:enviar-reporte-retardos-semanales';
+protected $description = 'Command description';
+```
+
+### What the Command Does
+
+1. **Collects tardiness data** from the current week (Monday to Sunday)
+2. **Identifies employees** with late check-ins
+3. **Finds employees** with no attendance records
+4. **Generates a PDF report** using DomPDF
+5. **Sends emails** to all users with notifications enabled
+
+### Implementation
+
+From `app/Console/Commands/EnviarReporteRetardosSemanales.php:33-66`:
+
+```php
+public function handle()
+{
+    $inicioSemana = now()->startOfWeek(); // Monday
+    $finSemana = now()->endOfWeek();     // Sunday
+
+    // Get employees with tardiness between Monday and Friday
+    $retardos = Asistencia::with('empleado')
+        ->where('retardo', 1)
+        ->whereBetween('created_at', [$inicioSemana, $finSemana])
+        ->get()
+        ->groupBy('empleado_id');
+
+    // Employees without attendance in the week
+    $empleadosSinAsistencia = Empleado::whereDoesntHave('asistencias', function ($query) use ($inicioSemana, $finSemana) {
+        $query->whereBetween('created_at', [$inicioSemana, $finSemana]);
+    })->get();
+
+    if ($retardos->isEmpty() && $empleadosSinAsistencia->isEmpty()) {
+        Log::info('No hay retardos ni empleados sin asistencia esta semana.');
+        return;
+    }
+
+    // Get users who want notifications
+    $usuarios = User::where('yes_notifications', true)->get();
+
+    // Generate PDF
+    $pdf = PDF::loadView('emails.reporte_pdf', compact('retardos', 'empleadosSinAsistencia'));
+    $pdfContent = $pdf->output();
+
+    // Send emails
+    foreach ($usuarios as $usuario) {
+        Mail::to($usuario->email)->send(new ReporteRetardosMail($retardos, $empleadosSinAsistencia, $pdfContent));
+    }
+
+    Log::info('Reporte de retardos y asistencias enviado.');
+}
+```
+
+### Running the Command
+
+Manually execute the command:
+
+```bash
+php artisan app:enviar-reporte-retardos-semanales
+```
+
+### Scheduling the Command
+
+To send reports automatically, add the command to `app/Console/Kernel.php`:
+
+```php
+protected function schedule(Schedule $schedule)
+{
+    // Send report every Monday at 8:00 AM
+    $schedule->command('app:enviar-reporte-retardos-semanales')
+             ->weekly()
+             ->mondays()
+             ->at('08:00');
+}
+```
+
+Ensure the Laravel scheduler is running:
+
+```bash
+* * * * * cd /path-to-your-project && php artisan schedule:run >> /dev/null 2>&1
+```
+
+<Note>
+Add this cron entry to your server's crontab to enable scheduled tasks.
+</Note>
+
+## Report Email Template
+
+The system uses a Mailable class to structure the email.
+
+### ReporteRetardosMail Class
+
+**File:** `app/Mail/ReporteRetardosMail.php`
+
+```php
+class ReporteRetardosMail extends Mailable
+{
+    use Queueable, SerializesModels;
+
+    public $retardos;
+    public $empleadosSinAsistencia;
+    public $pdfContent;
+
+    public function __construct($retardos, $empleadosSinAsistencia, $pdfContent)
+    {
+        $this->retardos = $retardos;
+        $this->empleadosSinAsistencia = $empleadosSinAsistencia;
+        $this->pdfContent = $pdfContent;
+    }
+
+    public function build()
+    {
+        return $this->subject('Reporte Semanal de Retardos y Asistencias')
+                    ->view('emails.reporte_retardos')
+                    ->attachData($this->pdfContent, 'ReporteRetardos.pdf', [
+                        'mime' => 'application/pdf',
+                    ]);
+    }
+}
+```
+
+### Email Views
+
+The command uses two views:
+
+1. **`emails.reporte_retardos`**: HTML email body
+2. **`emails.reporte_pdf`**: PDF attachment content
+
+These views should be created in `resources/views/emails/`.
+
+## Testing Email Configuration
+
+### Test Email Sending
+
+Create a test route to verify email configuration:
+
+```php
+Route::get('/test-email', function () {
+    Mail::raw('Test email from ChecadorCumbres', function ($message) {
+        $message->to('test@example.com')
+                ->subject('Test Email');
+    });
+    
+    return 'Email sent!';
+});
+```
+
+### Check Email Logs
+
+If using the log driver, check `storage/logs/laravel.log` for email content.
+
+### Queue Emails
+
+For better performance, queue emails instead of sending synchronously:
+
+```php
+Mail::to($usuario->email)
+    ->queue(new ReporteRetardosMail($retardos, $empleadosSinAsistencia, $pdfContent));
+```
+
+Ensure queue workers are running:
+
+```bash
+php artisan queue:work
+```
+
+## Common Email Providers
+
+### Gmail
+
+<Warning>
+Gmail requires an App Password when using 2FA. Generate one at: https://myaccount.google.com/apppasswords
+</Warning>
+
+```env
+MAIL_MAILER=smtp
+MAIL_HOST=smtp.gmail.com
+MAIL_PORT=587
+MAIL_USERNAME=your_gmail@gmail.com
+MAIL_PASSWORD=your_app_password
+MAIL_ENCRYPTION=tls
+```
+
+### SendGrid
+
+```env
+MAIL_MAILER=smtp
+MAIL_HOST=smtp.sendgrid.net
+MAIL_PORT=587
+MAIL_USERNAME=apikey
+MAIL_PASSWORD=your_sendgrid_api_key
+```
+
+### Mailgun
+
+Install the Mailgun package:
+
+```bash
+composer require symfony/mailgun-mailer
+```
+
+Configure in `.env`:
+
+```env
+MAIL_MAILER=mailgun
+MAILGUN_DOMAIN=mg.yourdomain.com
+MAILGUN_SECRET=your_mailgun_secret
+```
+
+## Troubleshooting
+
+### Emails Not Sending
+
+1. Check `storage/logs/laravel.log` for errors
+2. Verify SMTP credentials
+3. Test connection manually:
+
+```bash
+telnet smtp.gmail.com 587
+```
+
+4. Check firewall rules for outbound SMTP
+5. Verify `yes_notifications` is enabled for users
+
+### SSL/TLS Errors
+
+If you encounter SSL certificate errors:
+
+```env
+MAIL_ENCRYPTION=tls
+```
+
+Or for legacy servers:
+
+```env
+MAIL_ENCRYPTION=ssl
+MAIL_PORT=465
+```
+
+### No Users Receiving Emails
+
+Verify users have notifications enabled:
+
+```sql
+SELECT id, name, email, yes_notifications FROM users WHERE yes_notifications = 1;
+```
+
+If no users are found, enable notifications:
+
+```sql
+UPDATE users SET yes_notifications = 1 WHERE level_user IN (1, 2);
+```
+
+## Performance Considerations
+
+### Queue Configuration
+
+For large deployments with many recipients, use queues:
+
+```env
+QUEUE_CONNECTION=database
+```
+
+Update the command to queue emails:
+
+```php
+foreach ($usuarios as $usuario) {
+    Mail::to($usuario->email)
+        ->queue(new ReporteRetardosMail($retardos, $empleadosSinAsistencia, $pdfContent));
+}
+```
+
+### Rate Limiting
+
+If your email provider has rate limits, add delays:
+
+```php
+foreach ($usuarios as $usuario) {
+    Mail::to($usuario->email)
+        ->later(now()->addSeconds(5), new ReporteRetardosMail(...));
+}
+```

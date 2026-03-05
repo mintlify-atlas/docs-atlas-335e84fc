@@ -1,0 +1,139 @@
+---
+title: 'Empleado Model'
+description: 'Employee model representing staff members in the system'
+---
+
+## Overview
+
+The `Empleado` model represents employees in the ChecadorCumbres system. It uses a custom non-incrementing primary key (employee number) and manages employee information including personal details, department, and position.
+
+## Model Configuration
+
+```php
+use App\Models\Empleado;
+```
+
+### Primary Key Configuration
+
+The Empleado model uses a custom primary key configuration:
+
+- **Primary Key**: `id` (employee number)
+- **Auto-incrementing**: `false` (manually assigned)
+- **Key Type**: `int` (unsignedBigInteger)
+
+## Fields
+
+<ResponseField name="id" type="unsignedBigInteger" required>
+  Employee number (primary key). This is manually assigned and not auto-incremented.
+</ResponseField>
+
+<ResponseField name="nombres" type="string" required>
+  Employee's first name(s).
+</ResponseField>
+
+<ResponseField name="apellido_paterno" type="string" required>
+  Employee's paternal last name.
+</ResponseField>
+
+<ResponseField name="apellido_materno" type="string" required>
+  Employee's maternal last name.
+</ResponseField>
+
+<ResponseField name="departamento" type="string" required>
+  Department where the employee works.
+</ResponseField>
+
+<ResponseField name="puesto" type="string" required>
+  Employee's job position or title.
+</ResponseField>
+
+<ResponseField name="email" type="string">
+  Employee's email address. Optional field.
+</ResponseField>
+
+<ResponseField name="tipo_horario" type="string" required>
+  Type of work schedule assigned to the employee.
+</ResponseField>
+
+<ResponseField name="foto" type="text">
+  Employee's photo data. Optional field stored as text.
+</ResponseField>
+
+<ResponseField name="created_at" type="timestamp">
+  Timestamp when the employee record was created.
+</ResponseField>
+
+<ResponseField name="updated_at" type="timestamp">
+  Timestamp when the employee record was last updated.
+</ResponseField>
+
+## Relationships
+
+### Asistencias (One-to-Many)
+
+An employee can have multiple attendance records:
+
+```php
+$empleado = Empleado::find(12345);
+$asistencias = $empleado->asistencias;
+```
+
+This relationship links to the [Asistencia](/api/models/asistencia) model.
+
+## Database Schema
+
+Table: `empleados`
+
+```sql
+CREATE TABLE empleados (
+    id UNSIGNED BIGINT PRIMARY KEY,
+    nombres VARCHAR(255) NOT NULL,
+    apellido_paterno VARCHAR(255) NOT NULL,
+    apellido_materno VARCHAR(255) NOT NULL,
+    departamento VARCHAR(255) NOT NULL,
+    puesto VARCHAR(255) NOT NULL,
+    email VARCHAR(255) NULL,
+    tipo_horario VARCHAR(255) NOT NULL,
+    foto TEXT NULL,
+    created_at TIMESTAMP NULL,
+    updated_at TIMESTAMP NULL
+);
+```
+
+## Usage Examples
+
+### Creating an Employee
+
+```php
+$empleado = Empleado::create([
+    'id' => 12345,
+    'nombres' => 'Juan Carlos',
+    'apellido_paterno' => 'García',
+    'apellido_materno' => 'López',
+    'departamento' => 'IT',
+    'puesto' => 'Desarrollador',
+    'email' => 'juan.garcia@example.com',
+    'tipo_horario' => 'completo',
+    'foto' => base64_encode($photoData)
+]);
+```
+
+### Finding an Employee
+
+```php
+// By employee number
+$empleado = Empleado::find(12345);
+
+// With attendance records
+$empleado = Empleado::with('asistencias')->find(12345);
+```
+
+### Querying Employees
+
+```php
+// By department
+$empleados = Empleado::where('departamento', 'IT')->get();
+
+// By work schedule type
+$empleados = Empleado::where('tipo_horario', 'completo')->get();
+```

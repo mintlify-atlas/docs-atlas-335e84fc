@@ -1,0 +1,215 @@
+---
+title: Employee Check-In and Check-Out
+description: Guide for employees to register their daily attendance using QR codes or employee numbers
+---
+
+ChecadorCumbres provides a simple and efficient way for employees to register their check-in and check-out times. The system supports both QR code scanning and manual employee number entry.
+
+## Accessing the Check-In System
+
+The check-in system is available at the root URL (`/`) and can be accessed without authentication. This public interface is designed for ease of use at physical check-in stations.
+
+```php
+Route::get('/', [HomeController::class, 'showWelcome']);
+Route::get('/empleado/{id}/buscar', [HomeController::class, 'buscarEmpleado']);
+```
+
+## Check-In Methods
+
+Employees can register their attendance using two methods:
+
+<Tabs>
+  <Tab title="QR Code Scanning">
+    The primary method for checking in is scanning your employee QR code:
+
+    <Steps>
+      <Step title="Position Your QR Code">
+        Hold your employee QR code in front of the scanner. The system uses HTML5 QR code scanning technology for fast recognition.
+      </Step>
+
+      <Step title="Wait for Recognition">
+        The system will automatically detect and process your QR code within seconds.
+      </Step>
+
+      <Step title="View Confirmation">
+        Your photo and name will appear on screen along with a confirmation message.
+      </Step>
+    </Steps>
+  </Tab>
+
+  <Tab title="Manual Employee Number Entry">
+    If you don't have a QR code, you can manually enter your employee number:
+
+    <Steps>
+      <Step title="Locate the Input Field">
+        Look for the section that says "Si no cuenta con código QR ingrese su numero de empleado" (If you don't have a QR code, enter your employee number).
+      </Step>
+
+      <Step title="Enter Your Number">
+        Type your employee number in the input field.
+      </Step>
+
+      <Step title="Click Submit">
+        Press the "Ingresar" (Enter) button to register your attendance.
+      </Step>
+    </Steps>
+  </Tab>
+</Tabs>
+
+## Understanding Schedule Types
+
+ChecadorCumbres supports two schedule types, each with different check-in/out behaviors:
+
+### Base Schedule (Horario Base)
+
+Employees with base schedules have fixed entry and exit times. The system enforces the following rules:
+
+<div className="grid grid-cols-1 gap-4 my-4">
+  <div>
+    **Check-In Window** (Before 11:30 AM by default)
+    - The system records your entry time
+    - Marks you as late if you arrive after the configured time limit (default: 7:35 AM)
+    - Automatically calculates tardiness based on the `hora_limite_entrada` configuration
+  </div>
+
+  <div>
+    **Check-Out Window** (After 11:30 AM by default)
+    - The system records your exit time
+    - Links it to your morning check-in record
+  </div>
+</div>
+
+<Warning>
+If you attempt to check out before 11:30 AM (the default `hora_limite_salida`), the system will ask for confirmation. If you check out before recording an entry, the system creates a special record with your check-out time only.
+</Warning>
+
+### Flexible Schedule (Horario Libre)
+
+Employees with flexible schedules have more freedom in their timing:
+
+- **First Scan**: Records your entry time
+- **Second Scan** (within 1 hour): Shows a confirmation prompt
+- **Second Scan** (after 1 hour): Automatically records your exit time
+- **No tardiness tracking**: The system doesn't mark flexible schedule employees as late
+
+<Note>
+The 1-hour threshold prevents accidental double-scans while allowing quick corrections if needed.
+</Note>
+
+## Check-In Workflow
+
+Here's what happens when you check in:
+
+<Steps>
+  <Step title="Employee Lookup">
+    The system searches for your employee record using the endpoint:
+    ```php
+    GET /empleado/{id}/buscar
+    ```
+    If not found, you'll see an error message: "Empleado no encontrado" (Employee not found).
+  </Step>
+
+  <Step title="Schedule Check">
+    The system retrieves your `tipo_horario` (schedule type) to determine which check-in rules to apply.
+  </Step>
+
+  <Step title="Existing Record Check">
+    The system checks if you already have an attendance record for today by querying:
+    ```php
+    Asistencia::where('empleado_id', $empleado->id)
+        ->whereDate('hora_entrada', today())
+        ->orWhereDate('hora_salida', today())
+    ```
+  </Step>
+
+  <Step title="Entry Registration">
+    If this is your first scan of the day, the system creates a new attendance record:
+    ```php
+    Asistencia::create([
+        'empleado_id' => $empleado->id,
+        'hora_entrada' => now(),
+        'hora_salida' => null,
+        'retardo' => $retardo,
+    ]);
+    ```
+  </Step>
+</Steps>
+
+## Check-Out Workflow
+
+When you scan for the second time (check-out):
+
+<Steps>
+  <Step title="Time Validation">
+    For base schedules, the system checks if it's after the configured exit time window (default: 11:30 AM).
+  </Step>
+
+  <Step title="Confirmation Prompt (if early)">
+    If you're checking out early or within 1 hour of check-in (for flexible schedules), you'll see:
+    
+    *"Ya has marcado tu entrada. ¿Quieres marcar tu salida?"* (You've already checked in. Do you want to check out?)
+
+    Click **Sí** (Yes) to confirm or **No** to cancel.
+  </Step>
+
+  <Step title="Exit Registration">
+    The system updates your existing attendance record:
+    ```php
+    $asistencia->hora_salida = now();
+    $asistencia->save();
+    ```
+  </Step>
+</Steps>
+
+## Special Cases and Edge Cases
+
+<Accordion title="Checking out before 1 hour (Flexible Schedule)">
+  For flexible schedule employees, if you scan again within 60 minutes of check-in, the system shows a confirmation modal. This prevents accidental check-outs due to double-scanning.
+
+  To confirm your early check-out, click "Sí" in the confirmation dialog.
+</Accordion>
+
+<Accordion title="No entry record but checking out">
+  If you forgot to check in but scan during the check-out window (after 11:30 AM), the system behavior depends on your schedule:
+
+  - **Base Schedule**: Creates a record with `hora_entrada = null`, marks you as late (`retardo = true`)
+  - **Flexible Schedule**: Creates a record with both `hora_entrada` and `hora_salida` set to the current time
+</Accordion>
+
+<Accordion title="Already checked in and out">
+  If you try to scan a third time after completing both check-in and check-out, you'll see:
+  
+  *"Ya tienes registrada la entrada y salida para hoy"* (You already have entry and exit recorded for today)
+
+  No additional records are created.
+</Accordion>
+
+<Accordion title="Employee not found">
+  If your employee number or QR code isn't recognized, verify:
+  - Your employee record exists in the system
+  - Your QR code matches your employee ID
+  - Your employee number is entered correctly
+
+  Contact your administrator if the issue persists.
+</Accordion>
+
+## Understanding Response Messages
+
+| Message | Meaning |
+|---------|----------|
+| **Entrada registrada correctamente** | Check-in recorded successfully |
+| **Salida registrada correctamente** | Check-out recorded successfully |
+| **Ya has marcado tu entrada** | You already checked in today |
+| **Ya tienes tu entrada y salida marcadas** | Both check-in and check-out are complete |
+| **Empleado no encontrado** | Employee record not found |
+
+## Configuration Options
+
+The following settings can be configured by administrators in the system configuration:
+
+- **hora_limite_entrada** (Default: 07:35:00): The time after which check-ins are marked as late
+- **hora_limite_salida** (Default: 11:30:00): The time that separates check-in window from check-out window
+
+<Note>
+These configurations are stored in the `configuraciones` table and can be modified through the admin preferences panel.
+</Note>

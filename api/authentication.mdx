@@ -1,0 +1,313 @@
+---
+title: 'Authentication'
+description: 'Learn how to authenticate with the ChecadorCumbres API using Laravel session-based authentication'
+---
+
+## Overview
+
+ChecadorCumbres uses Laravel's built-in session-based authentication system. Authentication is handled through the `AuthController` and protected routes use the `auth` middleware.
+
+## Authentication Flow
+
+1. User submits credentials via login form
+2. Server validates credentials and creates session
+3. Session cookie is returned to client
+4. Subsequent requests include session cookie for authentication
+5. User can logout to destroy session
+
+## Login Endpoint
+
+### Display Login Form
+
+```http
+GET /admin
+```
+
+Displays the login form for administrators.
+
+**Controller Method**: `AuthController::showLoginForm()` (routes/web.php:14)
+
+#### Response
+
+Returns the `auth.login` view.
+
+### Authenticate User
+
+```http
+POST /admin
+```
+
+Authenticates a user with email and password credentials.
+
+**Controller Method**: `AuthController::login()` (app/Http/Controllers/AuthController.php:16-30)
+
+#### Request Body
+
+<ParamField body="email" type="string" required>
+  User's email address
+</ParamField>
+
+<ParamField body="password" type="string" required>
+  User's password
+</ParamField>
+
+#### Example Request
+
+```html
+<form method="POST" action="/admin">
+    @csrf
+    <input type="email" name="email" required>
+    <input type="password" name="password" required>
+    <button type="submit">Login</button>
+</form>
+```
+
+#### Implementation Details
+
+From `AuthController.php:16-30`:
+
+```php
+public function login(Request $request)
+{
+    $credentials = $request->only('email', 'password');
+
+    if (Auth::attempt($credentials)) {
+        return redirect('/admin/asistencias');
+    }
+
+    return redirect('/admin')->withErrors(['login_error' => 'Credenciales inválidas.']);
+}
+```
+
+#### Success Response
+
+On successful authentication:
+- Session is created
+- User is redirected to `/admin/asistencias`
+- Session cookie is set
+
+#### Error Response
+
+On authentication failure:
+- User is redirected back to `/admin`
+- Error message: "Credenciales inválidas."
+
+<Warning>
+  The login endpoint requires a valid CSRF token. Include `@csrf` in your form.
+</Warning>
+
+## Logout Endpoint
+
+```http
+POST /logout
+```
+
+Logs out the current authenticated user and destroys the session.
+
+**Controller Method**: `AuthController::logout()` (app/Http/Controllers/AuthController.php:33-37)
+
+### Implementation Details
+
+From `AuthController.php:33-37`:
+
+```php
+public function logout()
+{
+    Auth::logout();
+    return redirect('/admin');
+}
+```
+
+### Example Request
+
+```html
+<form method="POST" action="/logout">
+    @csrf
+    <button type="submit">Logout</button>
+</form>
+```
+
+### Response
+
+On logout:
+- Session is destroyed
+- User is redirected to `/admin`
+- Session cookie is cleared
+
+## Authentication Middleware
+
+Protected routes use Laravel's `auth` middleware as defined in `routes/web.php:23`:
+
+```php
+Route::middleware('auth')->group(function () {
+    // Protected routes here
+});
+```
+
+### Protected Route Example
+
+From `routes/web.php:25`:
+
+```php
+Route::get('/asistencias', [AdminController::class, 'asistencias'])
+    ->name('admin.asistencias');
+```
+
+### Middleware Check Example
+
+From `AdminController.php:29-31`:
+
+```php
+if (!Auth::check()) {
+    abort(403, 'Acceso no autorizado');
+}
+```
+
+## CSRF Token Handling
+
+All authentication requests require CSRF protection.
+
+### Including CSRF Token in Forms
+
+```html
+<form method="POST" action="/admin">
+    @csrf
+    <input type="email" name="email">
+    <input type="password" name="password">
+    <button type="submit">Login</button>
+</form>
+```
+
+### Including CSRF Token in AJAX Requests
+
+```javascript
+// Add meta tag to your layout
+<meta name="csrf-token" content="{{ csrf_token() }}">
+
+// Include in fetch requests
+fetch('/logout', {
+    method: 'POST',
+    headers: {
+        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+        'Content-Type': 'application/json'
+    }
+})
+.then(response => response.json())
+.then(data => console.log(data));
+```
+
+## Session Configuration
+
+Session settings from `.env.example`:
+
+```env
+SESSION_DRIVER=database
+SESSION_LIFETIME=120
+SESSION_ENCRYPT=false
+SESSION_PATH=/
+SESSION_DOMAIN=null
+```
+
+<Note>
+  Sessions are stored in the database and expire after 120 minutes (2 hours) of inactivity.
+</Note>
+
+## Authentication Example
+
+### Complete Login Flow
+
+```javascript
+// 1. Get CSRF token
+const token = document.querySelector('meta[name="csrf-token"]').content;
+
+// 2. Submit login request
+fetch('/admin', {
+    method: 'POST',
+    headers: {
+        'X-CSRF-TOKEN': token,
+        'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body: new URLSearchParams({
+        email: 'admin@example.com',
+        password: 'password123'
+    })
+})
+.then(response => {
+    if (response.redirected) {
+        // Successful login, redirect to dashboard
+        window.location.href = response.url;
+    }
+})
+.catch(error => console.error('Login failed:', error));
+```
+
+### Checking Authentication Status
+
+In your Blade templates:
+
+```php
+@auth
+    <p>Welcome, {{ Auth::user()->name }}!</p>
+    <form method="POST" action="/logout">
+        @csrf
+        <button type="submit">Logout</button>
+    </form>
+@else
+    <a href="/admin">Login</a>
+@endauth
+```
+
+## Error Handling
+
+### Invalid Credentials
+
+When login fails with invalid credentials:
+
+```php
+return redirect('/admin')->withErrors(['login_error' => 'Credenciales inválidas.']);
+```
+
+Display errors in your view:
+
+```php
+@error('login_error')
+    <div class="alert alert-danger">{{ $message }}</div>
+@enderror
+```
+
+### Unauthorized Access (403)
+
+From `AdminController.php:29-31`:
+
+```php
+if (!Auth::check()) {
+    abort(403, 'Acceso no autorizado');
+}
+```
+
+<Warning>
+  Attempting to access protected routes without authentication will result in a 403 Forbidden error or redirect to the login page.
+</Warning>
+
+## Security Best Practices
+
+1. **Always use HTTPS in production** - Session cookies should be transmitted securely
+2. **Validate CSRF tokens** - All state-changing requests must include valid CSRF tokens
+3. **Set secure session configuration** - Enable `SESSION_ENCRYPT=true` in production
+4. **Use strong passwords** - Enforce password requirements (minimum 6 characters per validation rules)
+5. **Monitor session lifetime** - Sessions expire after 120 minutes of inactivity
+
+## User Model
+
+Users are authenticated against the `users` table with the following structure:
+
+- `email` - Unique email address (used for login)
+- `password` - Hashed password (bcrypt)
+- `name` - User first name
+- `last_name` - User last name
+- `level_user` - User permission level (0, 1, or 2)
+- `yes_notifications` - Notification preferences
+
+<Note>
+  Passwords are hashed using `Hash::make()` before storage (see `UsuarioController.php:53`).
+</Note>

@@ -1,0 +1,266 @@
+---
+title: 'Employee Management'
+description: 'Comprehensive employee management system with CRUD operations, department organization, and photo uploads'
+icon: 'users'
+---
+
+## Overview
+
+ChecadorCumbres provides a complete employee management system that handles employee information, department organization, position tracking, and profile photos. The system uses Laravel's Eloquent ORM with a custom primary key structure based on employee IDs.
+
+## Employee Model Structure
+
+The `Empleado` model uses a custom non-auto-incrementing primary key and includes the following fields:
+
+```php
+protected $fillable = [
+    'id',                  // Employee number (custom primary key)
+    'nombres',             // First name(s)
+    'apellido_paterno',    // Paternal surname
+    'apellido_materno',    // Maternal surname
+    'departamento',        // Department
+    'puesto',              // Position/Role
+    'email',               // Email address
+    'tipo_horario',        // Schedule type (horario base / horario libre)
+    'foto',                // Profile photo filename
+];
+```
+
+<Info>
+The employee ID is not auto-incremented, allowing you to use custom employee numbers that match your organization's existing numbering system.
+</Info>
+
+## CRUD Operations
+
+### Creating Employees
+
+The system validates all employee data before creation, including email domain verification:
+
+```php
+public function guardarEmpleado(Request $request)
+{
+    $request->validate([
+        'id' => 'required|unique:empleados,id',
+        'nombres' => 'required',
+        'apellido_paterno' => 'required',
+        'apellido_materno' => 'required',
+        'departamento' => 'required',
+        'puesto' => 'required',
+        'tipo_horario' => 'required',
+        'email' => ['required', 'email', 'unique:empleados', function ($attribute, $value, $fail) {
+            $domain = substr(strrchr($value, "@"), 1);
+            if (!checkdnsrr($domain, 'MX')) {
+                $fail('El dominio del correo electrónico no es válido.');
+            }
+        }],
+        'foto' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
+    ]);
+}
+```
+
+<CardGroup cols={2}>
+  <Card title="Email Validation" icon="envelope-circle-check">
+    The system performs DNS MX record verification to ensure email domains are valid before accepting them.
+  </Card>
+  <Card title="Photo Validation" icon="image">
+    Profile photos are validated for type (JPEG, PNG, JPG, GIF) and size (max 2MB).
+  </Card>
+</CardGroup>
+
+### Reading & Listing Employees
+
+Employees can be listed with search functionality and pagination:
+
+```php
+private function obtenerEmpleados(Request $request)
+{
+    $query = Empleado::query();  
+
+    if ($request->filled('buscar')) {
+        $buscar = strtolower($request->buscar);
+        $query->whereRaw('LOWER(nombres) LIKE ?', ["%{$buscar}%"])
+            ->orWhereRaw('LOWER(apellido_paterno) LIKE ?', ["%{$buscar}%"])
+            ->orWhereRaw('LOWER(apellido_materno) LIKE ?', ["%{$buscar}%"])
+            ->orWhereRaw('LOWER(departamento) LIKE ?', ["%{$buscar}%"])
+            ->orWhereRaw('LOWER(id) LIKE ?', ["%{$buscar}%"]);
+    }
+
+    $query->orderByDesc('created_at');
+    $empleados = $query->paginate(10)->withQueryString();
+
+    return $empleados;
+}
+```
+
+**Search capabilities:**
+- Employee ID
+- First names
+- Paternal surname
+- Maternal surname
+- Department name
+
+### Updating Employees
+
+The update process handles photo replacement and validates email uniqueness:
+
+```php
+public function actualizarEmpleado(Request $request, $id)
+{
+    $empleado = Empleado::findOrFail($id);
+    
+    $fotoNombre = $empleado->foto;
+    if ($request->hasFile('foto')) {
+        // Delete old photo if exists
+        if ($empleado->foto && File::exists(public_path('img/empleados/' . $empleado->foto))) {
+            File::delete(public_path('img/empleados/' . $empleado->foto));
+        }
+        
+        // Save new photo with UUID filename
+        $file = $request->file('foto');
+        $fotoNombre = Str::uuid() . '.' . $file->getClientOriginalExtension();
+        $file->move(public_path('img/empleados'), $fotoNombre);
+    }
+    
+    $empleado->update($data);
+}
+```
+
+### Deleting Employees
+
+Deletion includes automatic cleanup of associated profile photos:
+
+```php
+public function destroy($id)
+{
+    $empleado = Empleado::findOrFail($id);
+    
+    // Delete photo file if exists
+    if ($empleado->foto) {
+        $fotoPath = public_path('img/empleados/' . $empleado->foto);
+        if (File::exists($fotoPath)) {
+            File::delete($fotoPath);
+        }
+    }
+    
+    $empleado->delete();
+}
+```
+
+<Warning>
+Deleting an employee will permanently remove their record and associated profile photo. This action cannot be undone.
+</Warning>
+
+## Department Management
+
+The system tracks employees across multiple departments with automatic counting:
+
+```php
+private function obtenerConteosPorDepartamento()
+{
+    $preescolarCount = Empleado::where('departamento', 'LIKE', '%preescolar%')->count();
+    $primariaCount = Empleado::where('departamento', 'LIKE', '%primaria%')->count();
+    $secundariaCount = Empleado::where('departamento', 'LIKE', '%secundaria%')->count();
+    $administrativosCount = Empleado::where('departamento', 'LIKE', '%administracion%')->count();
+    $academiasCount = Empleado::where('departamento', 'LIKE', '%academia%')->count();
+    $promocionCount = Empleado::where('departamento', 'LIKE', '%promocion%')->count();
+    $mantenimientoCount = Empleado::where('departamento', 'LIKE', '%mantenimiento%')->count();
+    $direccionCount = Empleado::where('departamento', 'LIKE', '%direccion%')->count();
+    $totales_empleados = Empleado::query()->count();
+    
+    return compact('preescolarCount', 'primariaCount', 'secundariaCount', 
+                   'administrativosCount', 'academiasCount', 'promocionCount', 
+                   'mantenimientoCount', 'direccionCount', 'totales_empleados');
+}
+```
+
+### Supported Departments
+
+<CardGroup cols={2}>
+  <Card title="Preescolar" icon="child">
+    Preschool department
+  </Card>
+  <Card title="Primaria" icon="school">
+    Primary school department
+  </Card>
+  <Card title="Secundaria" icon="graduation-cap">
+    Secondary school department
+  </Card>
+  <Card title="Administración" icon="briefcase">
+    Administration department
+  </Card>
+  <Card title="Academia" icon="book">
+    Academic department
+  </Card>
+  <Card title="Promoción" icon="bullhorn">
+    Promotion/Marketing department
+  </Card>
+  <Card title="Mantenimiento" icon="wrench">
+    Maintenance department
+  </Card>
+  <Card title="Dirección" icon="building">
+    Management/Direction department
+  </Card>
+</CardGroup>
+
+## Photo Upload Functionality
+
+Profile photos are handled with UUID-based filenames for security and uniqueness:
+
+<Accordion title="Photo Upload Implementation">
+```php
+if ($request->hasFile('foto')) {
+    $file = $request->file('foto');
+    $fotoNombre = Str::uuid() . '.' . $file->getClientOriginalExtension();
+    $file->move(public_path('img/empleados'), $fotoNombre);
+}
+```
+
+**Storage location:** `public/img/empleados/`
+
+**Naming convention:** UUID + original file extension (e.g., `550e8400-e29b-41d4-a716-446655440000.jpg`)
+</Accordion>
+
+## Employee Relationships
+
+Employees have a one-to-many relationship with attendance records:
+
+```php
+public function asistencias()
+{
+    return $this->hasMany(Asistencia::class, 'empleado_id', 'id');
+}
+```
+
+This relationship allows you to:
+- Track all attendance records for an employee
+- Calculate total hours worked
+- Analyze attendance patterns
+- Generate employee-specific reports
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Data Validation" icon="shield-check">
+    Always validate employee data on both client and server side. The system includes DNS verification for email domains.
+  </Card>
+  <Card title="Photo Management" icon="photo-film">
+    Use UUID filenames to prevent naming conflicts and enhance security. Always delete old photos when updating.
+  </Card>
+  <Card title="Search Optimization" icon="magnifying-glass">
+    Case-insensitive search across multiple fields provides better user experience for finding employees.
+  </Card>
+  <Card title="Department Tracking" icon="sitemap">
+    Use LIKE queries for department matching to handle variations in department naming.
+  </Card>
+</CardGroup>
+
+## Related Resources
+
+<CardGroup cols={2}>
+  <Card title="Attendance Tracking" icon="clock" href="/features/attendance-tracking">
+    Learn how employee attendance is tracked and managed
+  </Card>
+  <Card title="Schedule Types" icon="calendar" href="/features/schedule-types">
+    Understand different schedule types assigned to employees
+  </Card>
+</CardGroup>

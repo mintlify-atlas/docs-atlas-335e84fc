@@ -1,0 +1,184 @@
+---
+title: 'User Model'
+description: 'Authentication user model for system access and administration'
+---
+
+## Overview
+
+The `User` model extends Laravel's `Authenticatable` class and represents system users who can access the ChecadorCumbres application. It includes authentication features, user levels, and notification preferences.
+
+## Model Configuration
+
+```php
+use App\Models\User;
+```
+
+### Traits
+
+- **HasFactory**: Enables model factories for testing
+- **Notifiable**: Adds notification capabilities
+
+### Authentication
+
+This model extends `Illuminate\Foundation\Auth\User` as `Authenticatable`, providing full Laravel authentication features.
+
+## Fields
+
+<ResponseField name="id" type="bigInteger" required>
+  Auto-incrementing primary key for the user.
+</ResponseField>
+
+<ResponseField name="name" type="string" required>
+  User's first name.
+</ResponseField>
+
+<ResponseField name="last_name" type="string" required>
+  User's last name.
+</ResponseField>
+
+<ResponseField name="email" type="string" required>
+  User's email address. Must be unique across all users.
+</ResponseField>
+
+<ResponseField name="password" type="string" required>
+  User's hashed password. Automatically hashed when set.
+</ResponseField>
+
+<ResponseField name="level_user" type="tinyInteger" default="0">
+  User access level for authorization. Determines user permissions in the system.
+  - `0`: Standard user
+  - Higher values may indicate elevated privileges
+</ResponseField>
+
+<ResponseField name="yes_notifications" type="boolean" default="false">
+  Email notification preference. When `true`, the user receives email notifications.
+</ResponseField>
+
+<ResponseField name="foto" type="text">
+  User's profile photo data. Optional field stored as text.
+</ResponseField>
+
+<ResponseField name="email_verified_at" type="timestamp">
+  Timestamp when the user's email was verified. Cast to datetime.
+</ResponseField>
+
+<ResponseField name="remember_token" type="string">
+  Token for "remember me" authentication sessions. Hidden from serialization.
+</ResponseField>
+
+<ResponseField name="created_at" type="timestamp">
+  Timestamp when the user account was created.
+</ResponseField>
+
+<ResponseField name="updated_at" type="timestamp">
+  Timestamp when the user account was last updated.
+</ResponseField>
+
+## Hidden Attributes
+
+The following attributes are automatically hidden from JSON serialization for security:
+
+- `password`
+- `remember_token`
+
+## Attribute Casting
+
+- `email_verified_at` → `datetime`
+- `password` → `hashed` (automatically hashed on assignment)
+
+## Database Schema
+
+Table: `users`
+
+```sql
+CREATE TABLE users (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    last_name VARCHAR(255) NOT NULL,
+    email VARCHAR(255) UNIQUE NOT NULL,
+    password VARCHAR(255) NOT NULL,
+    level_user TINYINT DEFAULT 0,
+    yes_notifications BOOLEAN DEFAULT FALSE,
+    foto TEXT NULL,
+    created_at TIMESTAMP NULL,
+    updated_at TIMESTAMP NULL
+);
+```
+
+## Usage Examples
+
+### Creating a User
+
+```php
+$user = User::create([
+    'name' => 'María',
+    'last_name' => 'González',
+    'email' => 'maria.gonzalez@example.com',
+    'password' => bcrypt('secure-password'),
+    'level_user' => 1,
+    'yes_notifications' => true
+]);
+```
+
+### Authentication
+
+```php
+// Attempt login
+if (Auth::attempt(['email' => $email, 'password' => $password])) {
+    $user = Auth::user();
+    // User authenticated successfully
+}
+
+// Get authenticated user
+$user = auth()->user();
+echo $user->name . ' ' . $user->last_name;
+```
+
+### Checking User Permissions
+
+```php
+$user = User::find(1);
+
+if ($user->level_user > 0) {
+    // User has elevated privileges
+}
+```
+
+### Managing Notifications
+
+```php
+// Enable email notifications
+$user->update(['yes_notifications' => true]);
+
+// Send notification (if enabled)
+if ($user->yes_notifications) {
+    $user->notify(new AsistenciaNotification($data));
+}
+```
+
+### Querying Users
+
+```php
+// Get all admin users
+$admins = User::where('level_user', '>', 0)->get();
+
+// Get users with notifications enabled
+$notifiable = User::where('yes_notifications', true)->get();
+
+// Find by email
+$user = User::where('email', 'user@example.com')->first();
+```
+
+### Password Management
+
+```php
+// Update password (automatically hashed)
+$user->update([
+    'password' => bcrypt('new-password')
+]);
+
+// Verify password
+if (Hash::check('plain-password', $user->password)) {
+    // Password is correct
+}
+```

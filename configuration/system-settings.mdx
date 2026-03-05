@@ -1,0 +1,282 @@
+---
+title: System Settings
+description: Configure check-in time limits and other system-wide settings
+---
+
+## Overview
+
+ChecadorCumbres uses a flexible key-value configuration system stored in the `configuraciones` database table. This allows administrators to modify system behavior without changing code or environment variables.
+
+## Configuration Model
+
+The `Configuracion` model provides a simple interface for storing and retrieving settings:
+
+**Model:** `app/Models/Configuracion.php`
+
+```php
+class Configuracion extends Model
+{
+    protected $table = 'configuraciones';
+    protected $fillable = ['clave', 'valor'];
+    public $timestamps = false;
+
+    public static function getValor($clave, $default = null)
+    {
+        return optional(static::where('clave', $clave)->first())->valor ?? $default;
+    }
+}
+```
+
+### Database Schema
+
+```php
+Schema::create('configuraciones', function (Blueprint $table) {
+    $table->id();
+    $table->string('clave')->unique();  // Setting key
+    $table->string('valor');            // Setting value
+    $table->timestamps();
+});
+```
+
+## Check-In Time Limits
+
+The most important system setting is the check-in time limit, which determines when employees are marked as late.
+
+### hora_limite_entrada
+
+Defines the maximum time for on-time check-ins.
+
+**Format:** `H:i` (24-hour time format)
+**Default:** `07:35:00`
+**Example:** `08:00` (8:00 AM)
+
+<Note>
+Employees checking in after this time will be marked with `retardo = 1` in the asistencias table.
+</Note>
+
+### hora_limite_salida
+
+<Note>
+Currently commented out in the codebase but available for future use.
+</Note>
+
+Defines the expected check-out time.
+
+**Format:** `H:i` (24-hour time format)
+**Default:** `11:30:00`
+**Example:** `17:00` (5:00 PM)
+
+## Retrieving Settings
+
+Use the `getValor()` method to retrieve settings throughout the application:
+
+```php
+use App\Models\Configuracion;
+
+// Get check-in time limit with default fallback
+$horaLimite = Configuracion::getValor('hora_limite_entrada', '07:35:00');
+
+// Use in time comparison
+$horaLimiteCompleta = \Carbon\Carbon::parse(
+    $fechaHoy . ' ' . Configuracion::getValor('hora_limite_entrada', '07:35:00')
+);
+```
+
+### Real-World Usage
+
+From `app/Http/Controllers/HomeController.php:121`:
+
+```php
+$horaLimiteCompleta = \Carbon\Carbon::parse(
+    $fechaHoy . ' ' . Configuracion::getValor('hora_limite_entrada', '07:35:00')
+);
+
+if ($ahora->greaterThan($horaLimiteCompleta)) {
+    $esRetardo = 1;
+}
+```
+
+## Updating Settings
+
+Settings are managed through the `UsuarioController` in the admin panel.
+
+### Controller Method
+
+**File:** `app/Http/Controllers/UsuarioController.php:133-156`
+
+```php
+public function actualizarData(Request $request)
+{
+    $request->validate([
+        'hora_limite_entrada' => 'required|date_format:H:i',
+    ]);
+
+    try {
+        Configuracion::updateOrCreate(
+            ['clave' => 'hora_limite_entrada'],
+            ['valor' => $request->hora_limite_entrada]
+        );
+
+        return redirect()->route('admin.preferencias')
+            ->with('success', 'Configuraciones actualizadas correctamente.');
+    } catch (\Exception $e) {
+        return redirect()->back()
+            ->with('error', 'Error al actualizar usuario ' . $e->getMessage());
+    }
+}
+```
+
+### Admin Interface
+
+Administrators can update settings through the web interface at `/admin/configurar`.
+
+**View:** `resources/views/admin/usuarios/configurar.blade.php:22-38`
+
+```html
+<label for="hora_limite_entrada" class="block text-xl font-medium text-gray-700">
+    Hora Límite de Entrada:
+</label>
+<input type="time" 
+       name="hora_limite_entrada" 
+       id="hora_limite_entrada"
+       value="{{ old('hora_limite_entrada', $config['hora_limite_entrada'] ?? '') }}"
+       required>
+```
+
+## Adding Custom Settings
+
+You can add your own configuration keys using the same pattern:
+
+### 1. Store a Setting
+
+```php
+use App\Models\Configuracion;
+
+Configuracion::updateOrCreate(
+    ['clave' => 'custom_setting'],
+    ['valor' => 'your_value']
+);
+```
+
+### 2. Retrieve the Setting
+
+```php
+$value = Configuracion::getValor('custom_setting', 'default_value');
+```
+
+### 3. Update Admin Interface
+
+Add form fields to `resources/views/admin/usuarios/configurar.blade.php`:
+
+```html
+<label for="custom_setting">Custom Setting:</label>
+<input type="text" 
+       name="custom_setting" 
+       value="{{ old('custom_setting', $config['custom_setting'] ?? '') }}">
+```
+
+### 4. Update Controller Validation
+
+Modify `UsuarioController::actualizarData()`:
+
+```php
+$request->validate([
+    'hora_limite_entrada' => 'required|date_format:H:i',
+    'custom_setting' => 'required|string|max:255',
+]);
+
+Configuracion::updateOrCreate(
+    ['clave' => 'custom_setting'],
+    ['valor' => $request->custom_setting]
+);
+```
+
+## Available Settings
+
+Current system settings:
+
+| Key | Description | Format | Default | Used In |
+|-----|-------------|--------|---------|--------|
+| `hora_limite_entrada` | Check-in deadline | `H:i` | `07:35:00` | HomeController:121 |
+| `hora_limite_salida` | Check-out time | `H:i` | `11:30:00` | HomeController:48 (commented) |
+
+## Best Practices
+
+<Warning>
+**Important Considerations:**
+
+1. Always provide default values when calling `getValor()`
+2. Use appropriate validation when updating settings
+3. Time values should use 24-hour format (`H:i`)
+4. Cache frequently-accessed settings for performance
+5. Document any custom settings you add
+</Warning>
+
+### Caching Settings
+
+For performance in high-traffic scenarios:
+
+```php
+use Illuminate\Support\Facades\Cache;
+
+$horaLimite = Cache::remember('hora_limite_entrada', 3600, function () {
+    return Configuracion::getValor('hora_limite_entrada', '07:35:00');
+});
+```
+
+Clear cache after updates:
+
+```php
+Configuracion::updateOrCreate(
+    ['clave' => 'hora_limite_entrada'],
+    ['valor' => $request->hora_limite_entrada]
+);
+
+Cache::forget('hora_limite_entrada');
+```
+
+## Database Management
+
+### Manual Configuration
+
+You can also manage settings directly via SQL:
+
+```sql
+-- Insert or update setting
+INSERT INTO configuraciones (clave, valor, created_at, updated_at)
+VALUES ('hora_limite_entrada', '08:00', NOW(), NOW())
+ON DUPLICATE KEY UPDATE valor = '08:00', updated_at = NOW();
+
+-- View all settings
+SELECT * FROM configuraciones;
+
+-- Delete a setting
+DELETE FROM configuraciones WHERE clave = 'old_setting';
+```
+
+### Seeding Default Settings
+
+Create a seeder for default configuration:
+
+```php
+use App\Models\Configuracion;
+
+public function run()
+{
+    Configuracion::updateOrCreate(
+        ['clave' => 'hora_limite_entrada'],
+        ['valor' => '07:35:00']
+    );
+    
+    Configuracion::updateOrCreate(
+        ['clave' => 'hora_limite_salida'],
+        ['valor' => '11:30:00']
+    );
+}
+```
+
+Run the seeder:
+
+```bash
+php artisan db:seed --class=ConfiguracionSeeder
+```

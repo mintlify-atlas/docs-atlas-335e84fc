@@ -1,0 +1,354 @@
+---
+title: Installation
+description: Complete guide to install and configure ChecadorCumbres
+---
+
+## Prerequisites
+
+Before you begin, ensure you have the following installed on your system:
+
+- PHP 8.2 or higher
+- Composer (latest version)
+- MySQL 5.7+ or MariaDB 10.3+
+- Node.js 18.0+ and npm 9.0+
+- Git (for cloning the repository)
+
+<Warning>
+  ChecadorCumbres requires PHP 8.2 as specified in `composer.json`. Using an older PHP version will cause installation to fail.
+</Warning>
+
+## Installation Steps
+
+<Steps>
+  <Step title="Clone the Repository">
+    First, clone the ChecadorCumbres repository to your local machine or server:
+
+    ```bash
+    git clone <repository-url> checadorcumbres
+    cd checadorcumbres
+    ```
+
+    If you received the source code as a ZIP file, extract it to your desired location.
+  </Step>
+
+  <Step title="Install PHP Dependencies">
+    Install all required PHP packages using Composer:
+
+    ```bash
+    composer install
+    ```
+
+    This will install:
+    - Laravel Framework 12.0
+    - DomPDF for PDF generation
+    - Maatwebsite Excel for Excel exports
+    - Laravel Tinker for REPL interactions
+
+    <Note>
+      If you're deploying to production, use `composer install --optimize-autoloader --no-dev` to exclude development dependencies.
+    </Note>
+  </Step>
+
+  <Step title="Configure Environment Variables">
+    Copy the example environment file and configure it:
+
+    ```bash
+    cp .env.example .env
+    ```
+
+    Edit the `.env` file with your database credentials and application settings:
+
+    ```bash .env
+    APP_NAME="ChecadorCumbres"
+    APP_ENV=production
+    APP_DEBUG=false
+    APP_URL=https://your-domain.com
+
+    # Database Configuration
+    DB_CONNECTION=mysql
+    DB_HOST=127.0.0.1
+    DB_PORT=3306
+    DB_DATABASE=checadorcumbres
+    DB_USERNAME=your_database_user
+    DB_PASSWORD=your_secure_password
+
+    # Session & Cache
+    SESSION_DRIVER=database
+    SESSION_LIFETIME=120
+    CACHE_STORE=database
+    QUEUE_CONNECTION=database
+    ```
+
+    <Warning>
+      Always set `APP_DEBUG=false` in production environments to prevent sensitive information leakage.
+    </Warning>
+  </Step>
+
+  <Step title="Generate Application Key">
+    Generate a unique application key for encryption:
+
+    ```bash
+    php artisan key:generate
+    ```
+
+    This command automatically updates the `APP_KEY` value in your `.env` file.
+  </Step>
+
+  <Step title="Create Database">
+    Create a MySQL database for ChecadorCumbres:
+
+    <CodeGroup>
+      ```sql MySQL CLI
+      CREATE DATABASE checadorcumbres CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+      ```
+
+      ```bash Command Line
+      mysql -u root -p -e "CREATE DATABASE checadorcumbres CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+      ```
+    </CodeGroup>
+
+    Make sure the database name matches the `DB_DATABASE` value in your `.env` file.
+  </Step>
+
+  <Step title="Run Database Migrations">
+    Execute the migrations to create all required tables:
+
+    ```bash
+    php artisan migrate
+    ```
+
+    This creates the following tables:
+    - `users` - Admin user accounts
+    - `empleados` - Employee records
+    - `asistencias` - Attendance records
+    - `configuraciones` - System configuration
+    - Additional Laravel system tables (sessions, cache, jobs)
+
+    <Note>
+      The migrations run in a specific order to ensure proper foreign key constraints. The `asistencias` table has a foreign key relationship with `empleados`.
+    </Note>
+  </Step>
+
+  <Step title="Create Storage Link">
+    Create a symbolic link for public storage access:
+
+    ```bash
+    php artisan storage:link
+    ```
+
+    This allows employee photos stored in `storage/app/public` to be accessible via the web.
+  </Step>
+
+  <Step title="Set Directory Permissions">
+    Ensure the web server has write access to storage and cache directories:
+
+    <CodeGroup>
+      ```bash Linux/Mac
+      chmod -R 775 storage bootstrap/cache
+      chown -R www-data:www-data storage bootstrap/cache
+      ```
+
+      ```bash Using ACL (Recommended)
+      sudo setfacl -R -m u:www-data:rwX storage bootstrap/cache
+      sudo setfacl -dR -m u:www-data:rwX storage bootstrap/cache
+      ```
+    </CodeGroup>
+
+    <Warning>
+      Never use `chmod 777` in production. This creates a security vulnerability. Use proper user/group permissions instead.
+    </Warning>
+  </Step>
+
+  <Step title="Install Frontend Dependencies">
+    Install Node.js packages and compile assets:
+
+    ```bash
+    npm install
+    npm run build
+    ```
+
+    For development with hot-reload:
+
+    ```bash
+    npm run dev
+    ```
+  </Step>
+
+  <Step title="Create Admin User (Optional)">
+    Create your first admin user using Laravel Tinker:
+
+    ```bash
+    php artisan tinker
+    ```
+
+    Then in the Tinker console:
+
+    ```php
+    use App\Models\User;
+    use Illuminate\Support\Facades\Hash;
+
+    User::create([
+        'name' => 'Administrator',
+        'email' => 'admin@example.com',
+        'password' => Hash::make('your-secure-password'),
+        'is_admin' => true
+    ]);
+    ```
+
+    Type `exit` to leave Tinker.
+  </Step>
+
+  <Step title="Configure System Settings">
+    Access the admin panel and configure attendance time limits:
+
+    1. Log in at `/admin` with your admin credentials
+    2. Navigate to **Preferencias** → **Configurar**
+    3. Set the following values:
+       - `hora_limite_entrada`: Entry time limit (default: 07:35:00)
+       - `hora_limite_salida`: Exit time limit (default: 11:30:00)
+
+    <Note>
+      These settings determine when the system marks an employee as late and when to switch from entry mode to exit mode.
+    </Note>
+  </Step>
+</Steps>
+
+## Web Server Configuration
+
+### Apache Configuration
+
+If using Apache, ensure `mod_rewrite` is enabled and create a virtual host:
+
+```apache
+<VirtualHost *:80>
+    ServerName checador.yourdomain.com
+    DocumentRoot /var/www/checadorcumbres/public
+
+    <Directory /var/www/checadorcumbres/public>
+        AllowOverride All
+        Require all granted
+    </Directory>
+
+    ErrorLog ${APACHE_LOG_DIR}/checador-error.log
+    CustomLog ${APACHE_LOG_DIR}/checador-access.log combined
+</VirtualHost>
+```
+
+### Nginx Configuration
+
+For Nginx, use this configuration:
+
+```nginx
+server {
+    listen 80;
+    server_name checador.yourdomain.com;
+    root /var/www/checadorcumbres/public;
+
+    add_header X-Frame-Options "SAMEORIGIN";
+    add_header X-Content-Type-Options "nosniff";
+
+    index index.php;
+
+    charset utf-8;
+
+    location / {
+        try_files $uri $uri/ /index.php?$query_string;
+    }
+
+    location = /favicon.ico { access_log off; log_not_found off; }
+    location = /robots.txt  { access_log off; log_not_found off; }
+
+    error_page 404 /index.php;
+
+    location ~ \.php$ {
+        fastcgi_pass unix:/var/run/php/php8.2-fpm.sock;
+        fastcgi_param SCRIPT_FILENAME $realpath_root$fastcgi_script_name;
+        include fastcgi_params;
+    }
+
+    location ~ /\.(?!well-known).* {
+        deny all;
+    }
+}
+```
+
+## Optional: Queue Worker Setup
+
+ChecadorCumbres uses database queues for email notifications. Set up a queue worker:
+
+```bash
+php artisan queue:work --tries=3
+```
+
+For production, use a process manager like Supervisor:
+
+```ini /etc/supervisor/conf.d/checador-worker.conf
+[program:checador-worker]
+process_name=%(program_name)s_%(process_num)02d
+command=php /var/www/checadorcumbres/artisan queue:work --sleep=3 --tries=3 --max-time=3600
+autostart=true
+autorestart=true
+stopasgroup=true
+killasgroup=true
+user=www-data
+numprocs=2
+redirect_stderr=true
+stdout_logfile=/var/www/checadorcumbres/storage/logs/worker.log
+stopwaitsecs=3600
+```
+
+## Verification
+
+Verify your installation by accessing:
+
+- **Public Check-in Page**: `http://your-domain.com/`
+- **Admin Login**: `http://your-domain.com/admin`
+
+If everything is configured correctly, you should see the welcome page with the employee check-in interface.
+
+## Troubleshooting
+
+### Database Connection Error
+
+If you see "could not find driver":
+
+```bash
+# Install PHP MySQL extension
+sudo apt-get install php8.2-mysql
+sudo systemctl restart php8.2-fpm
+```
+
+### Permission Errors
+
+If you encounter permission denied errors:
+
+```bash
+# Fix ownership
+sudo chown -R www-data:www-data /var/www/checadorcumbres
+# Fix permissions
+sudo find /var/www/checadorcumbres -type f -exec chmod 644 {} \;
+sudo find /var/www/checadorcumbres -type d -exec chmod 755 {} \;
+sudo chmod -R 775 storage bootstrap/cache
+```
+
+### 500 Internal Server Error
+
+Check Laravel logs:
+
+```bash
+tail -f storage/logs/laravel.log
+```
+
+Ensure `APP_KEY` is set and all migrations have run.
+
+## Next Steps
+
+Now that installation is complete, proceed to the [Quick Start](/quickstart) guide to:
+- Create your first employee
+- Record attendance
+- Generate reports
+- Configure advanced settings
+
+<Card title="Quick Start Guide" icon="rocket" href="/quickstart">
+  Learn how to use ChecadorCumbres to track your first employee check-in
+</Card>

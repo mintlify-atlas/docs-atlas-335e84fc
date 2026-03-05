@@ -1,0 +1,146 @@
+---
+title: 'Asistencia Model'
+description: 'Attendance record model for tracking employee check-ins and check-outs'
+---
+
+## Overview
+
+The `Asistencia` model represents attendance records in the ChecadorCumbres system. It tracks employee check-in and check-out times, along with tardiness status.
+
+## Model Configuration
+
+```php
+use App\Models\Asistencia;
+```
+
+### Table Name
+
+- **Table**: `asistencias`
+
+### Date Casting
+
+The model automatically casts timestamp fields to Carbon datetime objects:
+- `hora_entrada` → `datetime`
+- `hora_salida` → `datetime`
+
+## Fields
+
+<ResponseField name="id" type="bigInteger" required>
+  Auto-incrementing primary key for the attendance record.
+</ResponseField>
+
+<ResponseField name="empleado_id" type="unsignedBigInteger" required>
+  Foreign key reference to the employee's ID. Links to [Empleado](/api/models/employee) model.
+</ResponseField>
+
+<ResponseField name="hora_entrada" type="timestamp">
+  Check-in time. Automatically cast to Carbon datetime instance. Can be null.
+</ResponseField>
+
+<ResponseField name="hora_salida" type="timestamp">
+  Check-out time. Automatically cast to Carbon datetime instance. Can be null.
+</ResponseField>
+
+<ResponseField name="retardo" type="boolean" default="false">
+  Indicates whether the employee was late. Defaults to false.
+</ResponseField>
+
+<ResponseField name="created_at" type="timestamp">
+  Timestamp when the attendance record was created.
+</ResponseField>
+
+<ResponseField name="updated_at" type="timestamp">
+  Timestamp when the attendance record was last updated.
+</ResponseField>
+
+## Relationships
+
+### Empleado (Belongs To)
+
+Each attendance record belongs to one employee:
+
+```php
+$asistencia = Asistencia::find(1);
+$empleado = $asistencia->empleado;
+
+echo $empleado->nombres; // Access employee's first name
+```
+
+This relationship links to the [Empleado](/api/models/employee) model.
+
+## Database Schema
+
+Table: `asistencias`
+
+```sql
+CREATE TABLE asistencias (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    empleado_id BIGINT UNSIGNED NOT NULL,
+    hora_entrada TIMESTAMP NULL,
+    hora_salida TIMESTAMP NULL,
+    retardo BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP NULL,
+    updated_at TIMESTAMP NULL,
+    FOREIGN KEY (empleado_id) REFERENCES empleados(id) ON DELETE CASCADE
+);
+```
+
+### Foreign Key Constraints
+
+The `empleado_id` field has a foreign key constraint with `ON DELETE CASCADE`, meaning attendance records are automatically deleted when the associated employee is removed.
+
+## Usage Examples
+
+### Recording Check-in
+
+```php
+$asistencia = Asistencia::create([
+    'empleado_id' => 12345,
+    'hora_entrada' => now(),
+    'retardo' => false
+]);
+```
+
+### Recording Check-out
+
+```php
+$asistencia = Asistencia::find(1);
+$asistencia->update([
+    'hora_salida' => now()
+]);
+```
+
+### Querying Attendance Records
+
+```php
+// Get today's attendance for an employee
+$asistencias = Asistencia::where('empleado_id', 12345)
+    ->whereDate('hora_entrada', today())
+    ->get();
+
+// Get all late arrivals
+$tardies = Asistencia::where('retardo', true)
+    ->with('empleado')
+    ->get();
+
+// Get attendance records with employee details
+$asistencias = Asistencia::with('empleado')
+    ->whereBetween('hora_entrada', [$start, $end])
+    ->get();
+```
+
+### Working with Datetime Fields
+
+```php
+$asistencia = Asistencia::find(1);
+
+// Access as Carbon instance
+echo $asistencia->hora_entrada->format('H:i:s');
+echo $asistencia->hora_entrada->diffForHumans();
+
+// Calculate duration
+if ($asistencia->hora_salida) {
+    $duration = $asistencia->hora_entrada->diffInHours($asistencia->hora_salida);
+    echo "Worked {$duration} hours";
+}
+```

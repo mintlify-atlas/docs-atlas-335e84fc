@@ -1,0 +1,167 @@
+---
+title: 'Configuracion Model'
+description: 'Key-value configuration system for application settings'
+---
+
+## Overview
+
+The `Configuracion` model provides a flexible key-value configuration system for storing application settings. It's commonly used to store time limits, thresholds, and other configurable parameters.
+
+## Model Configuration
+
+```php
+use App\Models\Configuracion;
+```
+
+### Table Configuration
+
+- **Table**: `configuraciones`
+- **Timestamps**: Disabled (`$timestamps = false`)
+
+## Fields
+
+<ResponseField name="id" type="bigInteger" required>
+  Auto-incrementing primary key.
+</ResponseField>
+
+<ResponseField name="clave" type="string" required>
+  Configuration key name. Must be unique. Used to identify the configuration setting.
+</ResponseField>
+
+<ResponseField name="valor" type="string" required>
+  Configuration value. Stored as string but can represent various data types.
+</ResponseField>
+
+<ResponseField name="created_at" type="timestamp">
+  Timestamp when the configuration was created (if timestamps enabled).
+</ResponseField>
+
+<ResponseField name="updated_at" type="timestamp">
+  Timestamp when the configuration was last updated (if timestamps enabled).
+</ResponseField>
+
+## Static Methods
+
+### getValor()
+
+Retrieves a configuration value by key with optional default fallback.
+
+```php
+public static function getValor($clave, $default = null)
+```
+
+**Parameters:**
+- `$clave` (string): The configuration key to retrieve
+- `$default` (mixed): Default value to return if key is not found
+
+**Returns:** The configuration value as a string, or the default value if not found
+
+## Database Schema
+
+Table: `configuraciones`
+
+```sql
+CREATE TABLE configuraciones (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    clave VARCHAR(255) UNIQUE NOT NULL,
+    valor VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP NULL,
+    updated_at TIMESTAMP NULL
+);
+```
+
+## Common Configuration Keys
+
+The ChecadorCumbres system uses the following configuration keys:
+
+- **`hora_limite_entrada`**: Time limit for employee check-in (e.g., "09:00:00")
+- **`hora_limite_salida`**: Time limit for employee check-out (e.g., "18:00:00")
+
+## Usage Examples
+
+### Creating Configuration Settings
+
+```php
+// Create a new configuration
+Configuracion::create([
+    'clave' => 'hora_limite_entrada',
+    'valor' => '09:00:00'
+]);
+
+Configuracion::create([
+    'clave' => 'hora_limite_salida',
+    'valor' => '18:00:00'
+]);
+```
+
+### Retrieving Configuration Values
+
+```php
+// Get configuration value using static method
+$horaLimite = Configuracion::getValor('hora_limite_entrada');
+// Returns: "09:00:00" or null if not found
+
+// Get with default value
+$horaLimite = Configuracion::getValor('hora_limite_entrada', '08:00:00');
+// Returns: "09:00:00" or "08:00:00" if not found
+
+// Using query builder
+$config = Configuracion::where('clave', 'hora_limite_entrada')->first();
+echo $config->valor; // "09:00:00"
+```
+
+### Updating Configuration Values
+
+```php
+// Update existing configuration
+$config = Configuracion::where('clave', 'hora_limite_entrada')->first();
+$config->update(['valor' => '08:30:00']);
+
+// Or using updateOrCreate
+Configuracion::updateOrCreate(
+    ['clave' => 'hora_limite_entrada'],
+    ['valor' => '08:30:00']
+);
+```
+
+### Practical Application Example
+
+```php
+// Check if employee is late based on configuration
+$horaLimite = Configuracion::getValor('hora_limite_entrada', '09:00:00');
+$horaEntrada = now();
+
+$retardo = $horaEntrada->format('H:i:s') > $horaLimite;
+
+Asistencia::create([
+    'empleado_id' => $empleadoId,
+    'hora_entrada' => $horaEntrada,
+    'retardo' => $retardo
+]);
+```
+
+### Bulk Configuration Retrieval
+
+```php
+// Get all configurations
+$configs = Configuracion::all()->pluck('valor', 'clave');
+
+// Access as array
+echo $configs['hora_limite_entrada']; // "09:00:00"
+echo $configs['hora_limite_salida'];  // "18:00:00"
+```
+
+### Seeding Configurations
+
+```php
+// In a database seeder
+$configuraciones = [
+    ['clave' => 'hora_limite_entrada', 'valor' => '09:00:00'],
+    ['clave' => 'hora_limite_salida', 'valor' => '18:00:00'],
+    ['clave' => 'minutos_tolerancia', 'valor' => '15'],
+];
+
+foreach ($configuraciones as $config) {
+    Configuracion::create($config);
+}
+```

@@ -1,0 +1,152 @@
+---
+title: Introduction
+description: Welcome to ChecadorCumbres - A modern employee attendance tracking system
+---
+
+## What is ChecadorCumbres?
+
+ChecadorCumbres is a comprehensive employee attendance management system built with Laravel. It provides an intuitive interface for employees to check in and out, while offering administrators powerful tools to track attendance, manage employee records, and generate detailed reports.
+
+<Note>
+  ChecadorCumbres supports multiple schedule types including fixed schedules ("Horario Base") and flexible schedules ("Horario Libre"), making it adaptable to various work environments.
+</Note>
+
+## Key Features
+
+### For Employees
+- **Quick Check-In/Out**: Simple interface for marking attendance using employee ID
+- **Automatic Delay Detection**: System automatically tracks late arrivals
+- **Photo Support**: Employee profiles with photo identification
+- **Flexible Schedules**: Support for both fixed and free schedule types
+
+### For Administrators
+- **Real-time Dashboard**: Monitor attendance across all departments
+- **Employee Management**: Complete CRUD operations for employee records
+- **Advanced Filtering**: Search and filter attendance by date, department, delays, and more
+- **Report Generation**: Export attendance data to PDF and Excel formats
+- **User Management**: Create and manage admin users with role-based access
+- **Configurable Settings**: Customize entry/exit time limits and other parameters
+
+## Architecture Overview
+
+### Technology Stack
+
+ChecadorCumbres is built on the Laravel ecosystem with the following core technologies:
+
+- **Framework**: Laravel 12.0
+- **PHP Version**: 8.2+
+- **Database**: MySQL (configurable)
+- **Frontend**: Blade templates with Vite
+- **PDF Generation**: DomPDF (barryvdh/laravel-dompdf)
+- **Excel Export**: Maatwebsite Excel
+
+### Core Components
+
+<Steps>
+  <Step title="Employee Module">
+    Manages employee records including personal information, department, position, schedule type, and photos. Stored in the `empleados` table with custom non-incremental primary keys.
+  </Step>
+  
+  <Step title="Attendance Module">
+    Tracks check-in (`hora_entrada`) and check-out (`hora_salida`) times with automatic delay detection. Each attendance record is linked to an employee via foreign key relationship.
+  </Step>
+  
+  <Step title="User Management">
+    Provides authentication and authorization for administrative users with role-based access control.
+  </Step>
+  
+  <Step title="Configuration System">
+    Stores system-wide settings like entry time limits (default: 07:35:00) and exit time limits (default: 11:30:00) in the `configuraciones` table.
+  </Step>
+</Steps>
+
+### Database Schema
+
+The system uses four primary tables:
+
+```sql
+-- Employees table
+CREATE TABLE empleados (
+  id BIGINT UNSIGNED PRIMARY KEY,  -- Non-auto-incrementing employee number
+  nombres VARCHAR(255),
+  apellido_paterno VARCHAR(255),
+  apellido_materno VARCHAR(255),
+  departamento VARCHAR(255),
+  puesto VARCHAR(255),
+  email VARCHAR(255),
+  tipo_horario VARCHAR(255),        -- "Horario Base" or "Horario Libre"
+  foto TEXT,
+  created_at TIMESTAMP,
+  updated_at TIMESTAMP
+);
+
+-- Attendance records
+CREATE TABLE asistencias (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  empleado_id BIGINT UNSIGNED,
+  hora_entrada TIMESTAMP NULL,
+  hora_salida TIMESTAMP NULL,
+  retardo BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMP,
+  updated_at TIMESTAMP,
+  FOREIGN KEY (empleado_id) REFERENCES empleados(id) ON DELETE CASCADE
+);
+```
+
+## System Requirements
+
+Before installing ChecadorCumbres, ensure your server meets these requirements:
+
+### Required Software
+
+- **PHP**: 8.2 or higher
+- **Composer**: Latest stable version
+- **Database**: MySQL 5.7+ or MariaDB 10.3+
+- **Web Server**: Apache 2.4+ or Nginx 1.18+
+- **Node.js**: 18.0+ (for asset compilation)
+- **npm**: 9.0+ (comes with Node.js)
+
+### PHP Extensions
+
+The following PHP extensions are required:
+
+- BCMath
+- Ctype
+- cURL
+- DOM
+- Fileinfo
+- JSON
+- Mbstring
+- OpenSSL
+- PCRE
+- PDO
+- PDO_MySQL
+- Tokenizer
+- XML
+- GD or Imagick (for image processing)
+
+<Warning>
+  Make sure the `php.ini` file has `memory_limit` set to at least 512M for optimal performance when generating reports with large datasets.
+</Warning>
+
+## Use Cases
+
+ChecadorCumbres is ideal for:
+
+- **Educational Institutions**: Track teacher and staff attendance across multiple departments (Preescolar, Primaria, Secundaria, Administración)
+- **Corporate Offices**: Monitor employee attendance with flexible schedule support
+- **Small to Medium Businesses**: Simple yet powerful attendance tracking without complex integrations
+- **Organizations with Mixed Schedules**: Support for both fixed-time and flexible schedule employees
+
+## What's Next?
+
+Ready to get started? Continue to the [Installation](/installation) guide to set up ChecadorCumbres, or jump straight to the [Quick Start](/quickstart) to begin tracking attendance right away.
+
+<CardGroup cols={2}>
+  <Card title="Installation" icon="download" href="/installation">
+    Step-by-step guide to install and configure ChecadorCumbres
+  </Card>
+  <Card title="Quick Start" icon="rocket" href="/quickstart">
+    Get your first employee check-in working in minutes
+  </Card>
+</CardGroup>

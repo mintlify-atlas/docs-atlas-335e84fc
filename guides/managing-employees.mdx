@@ -1,0 +1,301 @@
+---
+title: Managing Employees
+description: Complete guide to creating, editing, and deleting employee records in ChecadorCumbres
+---
+
+The employee management system allows administrators to maintain accurate records of all staff members, including their personal information, department assignments, and schedule types.
+
+## Accessing Employee Management
+
+Navigate to the employee management interface at `/admin/empleados`. This route is protected and requires authentication.
+
+```php
+Route::get('/admin/empleados', [EmpleadoController::class, 'listarEmpleados'])
+    ->name('admin.empleados');
+```
+
+## Employee Overview Dashboard
+
+The employee management page displays summary cards showing the count of employees in each department:
+
+<div className="grid grid-cols-2 md:grid-cols-4 gap-4 my-6">
+  <div>**Academia** - Teaching staff and academics</div>
+  <div>**Administración** - Administrative personnel</div>
+  <div>**Dirección** - Management and directors</div>
+  <div>**Preescolar** - Preschool department staff</div>
+  <div>**Primaria** - Primary school department staff</div>
+  <div>**Promoción** - Promotion and marketing staff</div>
+  <div>**Secundaria** - Secondary school department staff</div>
+  <div>**Mantenimiento** - Maintenance personnel</div>
+</div>
+
+The dashboard also shows the **Total de empleados** (total employee count) across all departments.
+
+## Creating a New Employee
+
+<Steps>
+  <Step title="Navigate to Create Employee">
+    Click the **Crear empleado** (Create employee) button on the employee management page. This takes you to `/admin/empleados/crear`.
+  </Step>
+
+  <Step title="Enter Basic Information">
+    Fill in the employee's basic details:
+
+    **Número de empleado** (Employee Number)
+    - Unique identifier for the employee
+    - Must be numeric
+    - Cannot duplicate an existing employee number
+    - This becomes the employee's primary ID in the system
+
+    **Nombres** (First Names)
+    - Employee's given name(s)
+    - Required field
+
+    **Apellido paterno** (Paternal Surname)
+    - Father's family name
+    - Required field
+
+    **Apellido materno** (Maternal Surname)
+    - Mother's family name
+    - Required field
+  </Step>
+
+  <Step title="Assign Department and Position">
+    **Departamento** (Department)
+    
+    Select from the dropdown:
+    - Academia
+    - Administración
+    - Dirección
+    - Preescolar
+    - Primaria
+    - Promoción
+    - Secundaria
+    - Mantenimiento
+
+    **Puesto** (Position)
+    - Free text field for job title (e.g., "Maestro de Matemáticas", "Coordinador", "Intendente")
+  </Step>
+
+  <Step title="Configure Schedule Type">
+    **Tipo de horario** (Schedule Type)
+
+    Choose between:
+
+    <Tabs>
+      <Tab title="Horario Base">
+        Fixed schedule with defined entry and exit times. Employees are marked as late if they arrive after the configured time limit.
+      </Tab>
+      <Tab title="Horario Libre">
+        Flexible schedule without tardiness tracking. Suitable for staff with variable working hours.
+      </Tab>
+    </Tabs>
+  </Step>
+
+  <Step title="Add Contact Information">
+    **Correo electrónico** (Email)
+    - Must be a valid email format
+    - Must be unique in the system
+    - The system validates that the domain has valid MX records
+    
+    ```php
+    function ($attribute, $value, $fail) {
+        $domain = substr(strrchr($value, "@"), 1);
+        if (!checkdnsrr($domain, 'MX')) {
+            $fail('El dominio del correo electrónico no es válido.');
+        }
+    }
+    ```
+  </Step>
+
+  <Step title="Upload Employee Photo">
+    **Foto** (Photo) - Optional
+    - Accepted formats: JPEG, PNG, JPG, GIF
+    - Maximum file size: 2MB (2048KB)
+    - Photos are stored with UUID filenames in `public/img/empleados/`
+    - The photo will be displayed during check-in/check-out
+  </Step>
+
+  <Step title="Submit the Form">
+    Click **Guardar** (Save) to create the employee record. You'll see a success message and be redirected to the employee list.
+  </Step>
+</Steps>
+
+<Warning>
+**Validation Requirements**
+- Employee number must be unique
+- Email must be unique and have a valid domain
+- All required fields must be filled
+- Photo must meet size and format requirements
+
+If validation fails, you'll see error messages at the top of the form.
+</Warning>
+
+## Searching for Employees
+
+Use the search bar at the top of the employee list to find specific employees:
+
+```php
+$query->whereRaw('LOWER(nombres) LIKE ?', ["%{$buscar}%"])
+    ->orWhereRaw('LOWER(apellido_paterno) LIKE ?', ["%{$buscar}%"])
+    ->orWhereRaw('LOWER(apellido_materno) LIKE ?', ["%{$buscar}%"])
+    ->orWhereRaw('LOWER(departamento) LIKE ?', ["%{$buscar}%"])
+    ->orWhereRaw('LOWER(id) LIKE ?', ["%{$buscar}%"]);
+```
+
+You can search by:
+- First names
+- Paternal surname
+- Maternal surname
+- Department
+- Employee number
+
+<Note>
+Searches are case-insensitive and match partial strings. For example, searching "maria" will find "María", "Mariana", and "MARIA".
+</Note>
+
+## Editing Employee Information
+
+<Steps>
+  <Step title="Enable Edit Mode">
+    Only administrators with `level_user = true` can edit employees. Toggle the "Editar empleado" switch to ON to reveal edit actions.
+  </Step>
+
+  <Step title="Select Employee to Edit">
+    Click the **Editar** (Edit) button next to the employee you want to modify. This opens the edit form at `/admin/empleados/{id}/editar`.
+  </Step>
+
+  <Step title="Update Employee Information">
+    The edit form displays all current employee data. You can modify:
+    - Employee number (can be changed to a different unique number)
+    - Names and surnames
+    - Department and position
+    - Schedule type
+    - Email address
+    - Photo (upload a new photo to replace the existing one)
+
+    The current photo is displayed at the top of the form.
+  </Step>
+
+  <Step title="Save Changes">
+    Click **Actualizar** (Update) to save your changes. The system validates the data and displays any errors if validation fails.
+  </Step>
+</Steps>
+
+<Note>
+When updating an employee's photo, the old photo file is automatically deleted from the server to save storage space:
+
+```php
+if ($empleado->foto && File::exists(public_path('img/empleados/' . $empleado->foto))) {
+    File::delete(public_path('img/empleados/' . $empleado->foto));
+}
+```
+</Note>
+
+## Deleting Employees
+
+<Warning>
+**Important: Deletion is Permanent**
+
+Deleting an employee removes their record from the system permanently. However, their attendance history is preserved due to the database relationship structure.
+</Warning>
+
+<Steps>
+  <Step title="Enable Edit Mode">
+    Toggle the "Editar empleado" switch to ON to reveal the delete option.
+  </Step>
+
+  <Step title="Click Delete Button">
+    Click the red **Eliminar** (Delete) button next to the employee you want to remove.
+  </Step>
+
+  <Step title="Confirm Deletion">
+    A confirmation dialog appears: "¿Eliminar empleado?" (Delete employee?)
+    
+    Click **OK** to confirm or **Cancel** to abort.
+  </Step>
+
+  <Step title="Automatic Photo Cleanup">
+    If the employee has a photo, it's automatically deleted from the server:
+
+    ```php
+    if ($empleado->foto) {
+        $fotoPath = public_path('img/empleados/' . $empleado->foto);
+        if (File::exists($fotoPath)) {
+            File::delete($fotoPath);
+        }
+    }
+    ```
+  </Step>
+</Steps>
+
+## Understanding the Employee Table
+
+The employee list table displays:
+
+| Column | Description |
+|--------|-------------|
+| **N. Empleado** | Unique employee identification number |
+| **Nombre** | Full name (first names + paternal + maternal surnames) |
+| **Departamento** | Department assignment |
+| **Puesto** | Job position or title |
+| **Email** | Contact email address (truncated if too long) |
+| **Acciones** | Edit and delete buttons (visible only when edit mode is ON) |
+
+## Employee Data Structure
+
+Employees are stored with the following database schema:
+
+```php
+protected $fillable = [
+    'id',                  // Custom employee number (not auto-increment)
+    'nombres',             // First names
+    'apellido_paterno',    // Paternal surname
+    'apellido_materno',    // Maternal surname
+    'departamento',        // Department
+    'puesto',              // Position/job title
+    'email',               // Email address
+    'tipo_horario',        // Schedule type (Base/Libre)
+    'foto',                // Photo filename (UUID)
+];
+```
+
+## Pagination
+
+The employee list displays 10 employees per page. Use the pagination controls at the bottom to navigate between pages:
+
+```php
+$empleados = $query->paginate(10)->withQueryString();
+```
+
+<Note>
+Pagination preserves your search query, so you can browse search results across multiple pages without losing your filters.
+</Note>
+
+## Best Practices
+
+<Accordion title="When should I use 'Horario Base' vs 'Horario Libre'?">
+  **Horario Base** is best for:
+  - Teaching staff with fixed class schedules
+  - Administrative staff with regular office hours
+  - Any role requiring strict punctuality tracking
+
+  **Horario Libre** is best for:
+  - Management and directors with flexible schedules
+  - Maintenance staff with variable hours
+  - Part-time or contract workers
+</Accordion>
+
+<Accordion title="What happens to attendance records when I delete an employee?">
+  Attendance records are preserved due to the database relationship. The attendance records will remain in the system but won't be linked to an active employee. This maintains historical accuracy for reporting purposes.
+</Accordion>
+
+<Accordion title="Can I change an employee's number after creation?">
+  Yes, you can change the employee number in the edit form, as long as the new number is unique. However, be aware that:
+  - QR codes linked to the old number will need to be regenerated
+  - Existing attendance records remain associated with the employee through the database relationship
+</Accordion>
+
+<Accordion title="How do I bulk import employees?">
+  Currently, ChecadorCumbres doesn't have a built-in bulk import feature. Employees must be added one at a time through the web interface. For large imports, contact your system administrator who may be able to use database seeding tools.
+</Accordion>

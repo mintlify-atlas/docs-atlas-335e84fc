@@ -1,80 +1,479 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: Quick Start
+description: Get up and running with your first employee check-in in minutes
 ---
 
-## Get started in three steps
+## Overview
 
-Get your documentation site running locally and make your first customization.
-
-### Step 1: Set up your local environment
-
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
-    
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
-
-### Step 2: Deploy your changes
-
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
-
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
-
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
-
-### Step 3: Go live
-
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
-
-## Next steps
-
-Now that you have your docs running, explore these key features:
-
-<CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
-</CardGroup>
+This guide will walk you through the essential workflows in ChecadorCumbres, from creating your first employee to generating attendance reports. By the end, you'll have a fully functional attendance tracking system.
 
 <Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
+  This guide assumes you've completed the [installation](/installation) process and have admin access to the system.
 </Note>
+
+## Step 1: Access the Admin Panel
+
+Navigate to the admin login page and authenticate:
+
+```
+https://your-domain.com/admin
+```
+
+Enter your admin credentials created during installation. Upon successful login, you'll be redirected to the attendance dashboard at `/admin/asistencias`.
+
+<Steps>
+  <Step title="Login to Admin Panel">
+    Access the admin panel at `/admin` and enter your credentials.
+  </Step>
+  
+  <Step title="View the Dashboard">
+    The dashboard displays real-time attendance data with filtering options.
+  </Step>
+</Steps>
+
+## Step 2: Create Your First Employee
+
+<Steps>
+  <Step title="Navigate to Employee Management">
+    From the admin panel, click on **Empleados** in the navigation menu to access the employee list at `/admin/empleados`.
+  </Step>
+
+  <Step title="Click Create Employee">
+    Click the **Crear Empleado** button or navigate to `/admin/empleados/crear`.
+  </Step>
+
+  <Step title="Fill in Employee Details">
+    Complete the employee creation form with the following information:
+
+    - **Employee ID** (`id`): A unique numeric identifier (e.g., 1001)
+    - **First Name** (`nombres`): Employee's first name
+    - **Paternal Surname** (`apellido_paterno`): Father's last name
+    - **Maternal Surname** (`apellido_materno`): Mother's last name
+    - **Department** (`departamento`): Choose from:
+      - Preescolar
+      - Primaria
+      - Secundaria
+      - Administración
+      - Academia
+      - Promoción
+      - Mantenimiento
+      - Dirección
+    - **Position** (`puesto`): Job title (e.g., "Maestro", "Administrador")
+    - **Email** (`email`): Valid email address with proper DNS records
+    - **Schedule Type** (`tipo_horario`):
+      - **Horario Base**: Fixed schedule with strict entry time
+      - **Horario Libre**: Flexible schedule
+    - **Photo** (`foto`): Optional profile photo (JPEG, PNG, GIF - max 2MB)
+
+    <Warning>
+      The Employee ID must be unique and cannot be changed later. Choose carefully!
+    </Warning>
+  </Step>
+
+  <Step title="Save the Employee">
+    Click **Guardar** to create the employee record. You'll be redirected to the employee list with a success message.
+  </Step>
+</Steps>
+
+### Example Employee Creation Request
+
+The system processes this data via the `EmpleadoController@guardarEmpleado` method:
+
+```php
+// Route: POST /admin/empleados
+Empleado::create([
+    'id' => 1001,
+    'nombres' => 'Juan',
+    'apellido_paterno' => 'García',
+    'apellido_materno' => 'López',
+    'departamento' => 'Primaria',
+    'puesto' => 'Maestro de Matemáticas',
+    'email' => 'juan.garcia@example.com',
+    'tipo_horario' => 'Horario Base',
+    'foto' => 'unique-uuid.jpg'
+]);
+```
+
+## Step 3: Configure System Settings
+
+Before tracking attendance, configure the time limits:
+
+<Steps>
+  <Step title="Access Preferences">
+    Navigate to **Preferencias** → **Configurar** at `/admin/preferencias/configurar`.
+  </Step>
+
+  <Step title="Set Time Limits">
+    Configure the following settings:
+
+    - **hora_limite_entrada**: Entry time limit (default: `07:35:00`)
+      - Employees checking in after this time are marked as late (`retardo = true`)
+    - **hora_limite_salida**: Exit time cutoff (default: `11:30:00`)
+      - Before this time: System records entries
+      - After this time: System records exits
+  </Step>
+
+  <Step title="Save Configuration">
+    Submit the form to update system settings.
+  </Step>
+</Steps>
+
+<Note>
+  These settings are stored in the `configuraciones` table and accessed throughout the application using `Configuracion::getValor()`.
+</Note>
+
+## Step 4: Record Your First Check-In
+
+Now let's track attendance using the public-facing check-in interface:
+
+<Steps>
+  <Step title="Access the Check-In Page">
+    Navigate to the homepage (root URL):
+
+    ```
+    https://your-domain.com/
+    ```
+
+    This displays the employee check-in interface (`welcome.blade.php`).
+  </Step>
+
+  <Step title="Enter Employee ID">
+    Enter the employee ID (e.g., `1001`) in the search field and press Enter or click Search.
+  </Step>
+
+  <Step title="System Processes Check-In">
+    The system makes a GET request to `/empleado/{id}/buscar` which:
+
+    1. Locates the employee record
+    2. Determines the current time
+    3. Checks if an attendance record exists for today
+    4. Applies schedule-specific logic
+  </Step>
+</Steps>
+
+### How Check-In Logic Works
+
+The `HomeController@agregarAsistencia` method implements different logic based on schedule type:
+
+#### For "Horario Base" (Fixed Schedule)
+
+```php
+// Before hora_limite_salida (11:30 AM)
+// → Records ENTRY
+if ($ahora->lessThan($horaLimiteSalida)) {
+    // Check if already has entry today
+    $asistencia = Asistencia::where('empleado_id', $empleado->id)
+        ->whereDate('hora_entrada', today())
+        ->first();
+    
+    if (!$asistencia) {
+        // Determine if late
+        $horaLimite = Carbon::parse('07:35:00');
+        $retardo = $ahora->greaterThan($horaLimite);
+        
+        Asistencia::create([
+            'empleado_id' => $empleado->id,
+            'hora_entrada' => $ahora,
+            'hora_salida' => null,
+            'retardo' => $retardo
+        ]);
+    }
+}
+
+// After hora_limite_salida (11:30 AM)
+// → Records EXIT
+else {
+    $asistencia->hora_salida = now();
+    $asistencia->save();
+}
+```
+
+#### For "Horario Libre" (Flexible Schedule)
+
+```php
+// First scan: Records entry (no delay checking)
+if (!$asistencia) {
+    Asistencia::create([
+        'empleado_id' => $empleado->id,
+        'hora_entrada' => now(),
+        'hora_salida' => null,
+        'retardo' => false  // Never marked as late
+    ]);
+}
+
+// Second scan: Records exit
+// If less than 60 minutes since entry, asks for confirmation
+else if (is_null($asistencia->hora_salida)) {
+    $minutosDesdeEntrada = $asistencia->hora_entrada->diffInMinutes(now());
+    
+    if ($minutosDesdeEntrada < 60) {
+        // Return confirmation dialog
+        return [
+            'confirmar_salida' => true,
+            'asistencia_id' => $asistencia->id
+        ];
+    }
+    
+    // Auto-confirm if more than 1 hour
+    $asistencia->hora_salida = now();
+    $asistencia->save();
+}
+```
+
+### Confirming Early Exit
+
+If an employee checks in again within 60 minutes, they must confirm the exit:
+
+```php
+// Route: POST /asistencia/{id}/salida
+$asistencia = Asistencia::find($id);
+$asistencia->hora_salida = now();
+$asistencia->save();
+```
+
+## Step 5: View Attendance Records
+
+Return to the admin panel to view recorded attendance:
+
+<Steps>
+  <Step title="Navigate to Dashboard">
+    Go to `/admin/asistencias` to see the attendance dashboard.
+  </Step>
+
+  <Step title="Use Filters">
+    The dashboard provides powerful filtering options:
+
+    - **Date Range**: Filter by `fecha_inicio` and `fecha_fin`
+    - **Department**: View specific department attendance
+    - **Delays Only**: Show only employees with `retardo = true`
+    - **Entry Status**: Filter by presence/absence of `hora_entrada`
+    - **Exit Status**: Filter by presence/absence of `hora_salida`
+    - **Search**: Find specific employees by name or ID
+  </Step>
+
+  <Step title="Review Statistics">
+    The dashboard displays department-level statistics:
+
+    - Total employees per department
+    - Total attendance records
+    - Real-time filtering counts
+  </Step>
+</Steps>
+
+### Example Attendance Query
+
+The system retrieves attendance data via `AdminController@listarAsistencias`:
+
+```php
+// Route: GET /admin/asistencias
+$asistencias = Asistencia::with('empleado')
+    ->whereDate('created_at', today())
+    ->where('retardo', true)  // Show only delays
+    ->where(function($q) {
+        $q->whereHas('empleado', function($query) {
+            $query->where('departamento', 'Primaria');
+        });
+    })
+    ->orderByDesc('created_at')
+    ->paginate(10);
+```
+
+## Step 6: Generate Reports
+
+ChecadorCumbres provides two export formats:
+
+### Generate PDF Report
+
+<Steps>
+  <Step title="Apply Filters">
+    On the attendance dashboard, select your desired filters (date range, department, etc.).
+  </Step>
+
+  <Step title="Click PDF Export">
+    Click the PDF export button or navigate to `/admin/asistencias/reporte/pdf` with query parameters.
+  </Step>
+
+  <Step title="Download Report">
+    The system generates a PDF using DomPDF with filtered attendance data.
+  </Step>
+</Steps>
+
+```php
+// Route: GET /admin/asistencias/reporte/pdf
+public function generarReporte(Request $request)
+{
+    $asistencias = $this->listarAsistencias($request, false);
+    
+    $pdf = Pdf::loadView('admin.asistencias.reporte-pdf', [
+        'asistencias' => $asistencias,
+        'fecha_inicio' => $request->fecha_inicio,
+        'fecha_fin' => $request->fecha_fin
+    ]);
+    
+    return $pdf->download('reporte-asistencias.pdf');
+}
+```
+
+### Generate Excel Report
+
+<Steps>
+  <Step title="Apply Filters">
+    Configure the same filters as for PDF export.
+  </Step>
+
+  <Step title="Click Excel Export">
+    Navigate to `/admin/asistencias/reporte/excel`.
+  </Step>
+
+  <Step title="Download Spreadsheet">
+    The system exports data using Maatwebsite Excel with formatted columns and styles.
+  </Step>
+</Steps>
+
+```php
+// Route: GET /admin/asistencias/reporte/excel
+public function generarReporteExcel(Request $request)
+{
+    $asistencias = $this->listarAsistencias($request, false);
+    
+    return Excel::download(
+        new AsistenciasExport($asistencias),
+        'asistencias-' . now()->format('Y-m-d') . '.xlsx'
+    );
+}
+```
+
+## Advanced Workflows
+
+### Managing Multiple Employees
+
+Bulk import employees using Laravel Tinker:
+
+```php
+php artisan tinker
+
+use App\Models\Empleado;
+
+$empleados = [
+    ['id' => 1001, 'nombres' => 'Juan', 'apellido_paterno' => 'García', ...],
+    ['id' => 1002, 'nombres' => 'María', 'apellido_paterno' => 'López', ...],
+    // Add more employees
+];
+
+foreach ($empleados as $data) {
+    Empleado::create($data);
+}
+```
+
+### Handling Missing Entries
+
+When an employee checks out without checking in (arrives after `hora_limite_salida`):
+
+```php
+// System creates exit-only record
+Asistencia::create([
+    'empleado_id' => $empleado->id,
+    'hora_entrada' => null,  // No entry time
+    'hora_salida' => now(),
+    'retardo' => true         // Marked as late
+]);
+```
+
+### User Management
+
+Create additional admin users:
+
+<Steps>
+  <Step title="Navigate to Users">
+    Go to `/admin/preferencias` (user management section).
+  </Step>
+  
+  <Step title="Create New User">
+    Click **Crear Usuario** at `/admin/usuarios/crear`.
+  </Step>
+  
+  <Step title="Set Permissions">
+    Configure user name, email, password, and admin status.
+  </Step>
+</Steps>
+
+## Common Routes Reference
+
+### Public Routes
+
+- `GET /` - Employee check-in page
+- `GET /empleado/{id}/buscar` - Search and process employee check-in
+- `POST /asistencia/{id}/salida` - Confirm early exit
+
+### Admin Routes (Protected)
+
+- `GET /admin` - Login page
+- `GET /admin/asistencias` - Attendance dashboard
+- `GET /admin/asistencias/reporte/pdf` - Generate PDF report
+- `GET /admin/asistencias/reporte/excel` - Generate Excel report
+- `GET /admin/empleados` - Employee list
+- `POST /admin/empleados` - Create employee
+- `PUT /admin/empleados/{id}` - Update employee
+- `DELETE /admin/empleados/{id}` - Delete employee
+- `GET /admin/preferencias` - User management
+- `GET /admin/preferencias/configurar` - System settings
+
+## Troubleshooting
+
+### Employee Not Found
+
+If `/empleado/{id}/buscar` returns 404:
+
+```json
+{
+  "success": false,
+  "error": "Empleado no encontrado."
+}
+```
+
+Verify the employee ID exists in the database:
+
+```bash
+php artisan tinker
+App\Models\Empleado::find(1001);
+```
+
+### Check-In Not Recording
+
+Check Laravel logs:
+
+```bash
+tail -f storage/logs/laravel.log
+```
+
+Common issues:
+- Database connection errors
+- Missing `configuraciones` records
+- Timezone configuration mismatch
+
+### Report Generation Fails
+
+Ensure required packages are installed:
+
+```bash
+composer require barryvdh/laravel-dompdf
+composer require maatwebsite/excel
+```
+
+## Next Steps
+
+You now have a fully functional attendance tracking system! Explore more features:
+
+- Set up automated weekly delay reports (see `EnviarReporteRetardosSemanales` command)
+- Customize the UI by editing Blade templates in `resources/views/`
+- Configure email notifications for attendance alerts
+- Integrate with external HR systems via Laravel's API capabilities
+
+<CardGroup cols={2}>
+  <Card title="Employee Management" icon="users" href="/employees">
+    Learn advanced employee management techniques
+  </Card>
+  <Card title="Reports & Analytics" icon="chart-line" href="/reports">
+    Deep dive into reporting capabilities
+  </Card>
+</CardGroup>

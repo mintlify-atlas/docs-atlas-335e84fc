@@ -1,0 +1,193 @@
+---
+title: 'API Introduction'
+description: 'Overview of the ChecadorCumbres API endpoints and functionality'
+---
+
+## Overview
+
+The ChecadorCumbres API is a Laravel-based REST API for managing employee attendance tracking. The system provides endpoints for both public attendance registration and authenticated administrative operations.
+
+## Base URL
+
+```
+http://localhost:8000
+```
+
+<Note>
+  The base URL will vary depending on your environment. Update `APP_URL` in your `.env` file accordingly.
+</Note>
+
+## Available Endpoints
+
+### Public Endpoints
+
+These endpoints are accessible without authentication:
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/` | Display welcome page |
+| GET | `/empleado/{id}/buscar` | Search employee and register attendance |
+| POST | `/asistencia/{id}/salida` | Confirm exit time for attendance record |
+| GET | `/admin` | Display login form |
+| POST | `/admin` | Authenticate user |
+
+### Protected Endpoints (Require Authentication)
+
+These endpoints require session-based authentication via the `auth` middleware:
+
+#### Attendance Management
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/admin/asistencias` | View attendance dashboard with filters |
+| GET | `/admin/asistencias/reporte/pdf` | Generate PDF attendance report |
+| GET | `/admin/asistencias/reporte/excel` | Generate Excel attendance report |
+
+#### Employee Management
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/admin/empleados` | List all employees |
+| GET | `/admin/empleados/crear` | Show create employee form |
+| POST | `/admin/empleados` | Create new employee |
+| GET | `/admin/empleados/{id}/editar` | Show edit employee form |
+| PUT | `/admin/empleados/{id}` | Update employee |
+| DELETE | `/admin/empleados/{id}` | Delete employee |
+
+#### User Management
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/admin/preferencias` | List all users |
+| GET | `/admin/usuarios/crear` | Show create user form |
+| POST | `/admin/usuarios` | Create new user |
+| GET | `/admin/usuarios/{id}/editar` | Show edit user form |
+| PUT | `/admin/usuarios/{id}` | Update user |
+| DELETE | `/admin/usuarios/{id}` | Delete user |
+| GET | `/admin/preferencias/configurar` | Show configuration form |
+| POST | `/admin/preferencias/configuracion` | Update system configuration |
+
+#### Logout
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/logout` | Logout current user |
+
+## Request/Response Formats
+
+### Request Format
+
+All API requests should be sent with the appropriate content type:
+
+- **Form submissions**: `application/x-www-form-urlencoded` or `multipart/form-data`
+- **JSON requests**: `application/json`
+
+<Warning>
+  All POST, PUT, and DELETE requests must include a valid CSRF token when using session-based authentication.
+</Warning>
+
+### Response Format
+
+API responses are returned in JSON format for AJAX requests:
+
+```json
+{
+  "success": true,
+  "message": "Operation completed successfully",
+  "data": {}
+}
+```
+
+#### Error Response Example
+
+```json
+{
+  "success": false,
+  "error": "Empleado no encontrado."
+}
+```
+
+## HTTP Status Codes
+
+The API uses standard HTTP status codes:
+
+| Status Code | Description |
+|-------------|-------------|
+| 200 | OK - Request successful |
+| 400 | Bad Request - Invalid parameters |
+| 401 | Unauthorized - Authentication required |
+| 403 | Forbidden - Access denied |
+| 404 | Not Found - Resource not found |
+| 500 | Internal Server Error - Server error |
+
+## Error Handling
+
+### Employee Not Found
+
+From `HomeController.php:23-27`:
+
+```php
+if (!$empleado) {
+    return response()->json([
+        'success' => false,
+        'error' => 'Empleado no encontrado.'
+    ], 200);
+}
+```
+
+### General Error Handling
+
+From `HomeController.php:32-36`:
+
+```php
+catch (\Exception $e) {
+    return response()->json([
+        'success' => false,
+        'message' => 'Error al registrar asistencia: ' . $e->getMessage()
+    ], 500);
+}
+```
+
+## Rate Limiting
+
+<Note>
+  Rate limiting is not currently implemented in this version. Consider implementing Laravel's rate limiting middleware for production environments.
+</Note>
+
+## CSRF Protection
+
+All state-changing requests (POST, PUT, DELETE) require a CSRF token. Include the token in your requests:
+
+```html
+<form method="POST" action="/admin">
+    @csrf
+    <!-- form fields -->
+</form>
+```
+
+For AJAX requests, include the token in headers:
+
+```javascript
+fetch('/admin/empleados', {
+    method: 'POST',
+    headers: {
+        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+        'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(data)
+})
+```
+
+## Session Configuration
+
+From `.env.example`:
+
+```
+SESSION_DRIVER=database
+SESSION_LIFETIME=120
+SESSION_ENCRYPT=false
+```
+
+<Warning>
+  Sessions expire after 120 minutes of inactivity. Users will need to re-authenticate after this period.
+</Warning>

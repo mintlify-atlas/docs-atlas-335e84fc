@@ -1,0 +1,307 @@
+---
+title: Database Configuration
+description: Set up and configure your database for ChecadorCumbres
+---
+
+## Overview
+
+ChecadorCumbres uses Laravel's database abstraction layer to support multiple database systems. The application is configured to use MySQL by default but supports SQLite, PostgreSQL, MariaDB, and SQL Server.
+
+## Supported Databases
+
+### MySQL (Recommended)
+
+MySQL is the recommended database for ChecadorCumbres.
+
+```env
+DB_CONNECTION=mysql
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_DATABASE=checadorcumbres
+DB_USERNAME=root
+DB_PASSWORD=your_password
+```
+
+**Configuration options from `config/database.php`:**
+
+```php
+'mysql' => [
+    'driver' => 'mysql',
+    'host' => env('DB_HOST', '127.0.0.1'),
+    'port' => env('DB_PORT', '3306'),
+    'database' => env('DB_DATABASE', 'laravel'),
+    'username' => env('DB_USERNAME', 'root'),
+    'password' => env('DB_PASSWORD', ''),
+    'charset' => env('DB_CHARSET', 'utf8mb4'),
+    'collation' => env('DB_COLLATION', 'utf8mb4_unicode_ci'),
+    'strict' => true,
+    'engine' => null,
+],
+```
+
+### MariaDB
+
+```env
+DB_CONNECTION=mariadb
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_DATABASE=checadorcumbres
+DB_USERNAME=root
+DB_PASSWORD=your_password
+```
+
+### PostgreSQL
+
+```env
+DB_CONNECTION=pgsql
+DB_HOST=127.0.0.1
+DB_PORT=5432
+DB_DATABASE=checadorcumbres
+DB_USERNAME=postgres
+DB_PASSWORD=your_password
+```
+
+### SQLite
+
+For development or testing:
+
+```env
+DB_CONNECTION=sqlite
+DB_DATABASE=/absolute/path/to/database.sqlite
+```
+
+<Note>
+When using SQLite, create an empty database file first:
+```bash
+touch database/database.sqlite
+```
+</Note>
+
+### SQL Server
+
+```env
+DB_CONNECTION=sqlsrv
+DB_HOST=localhost
+DB_PORT=1433
+DB_DATABASE=checadorcumbres
+DB_USERNAME=sa
+DB_PASSWORD=your_password
+```
+
+## Database Migrations
+
+ChecadorCumbres includes the following core migrations:
+
+### Users Table
+
+**Migration:** `0001_01_01_000000_create_users_table.php`
+
+Stores system users and administrators:
+
+```php
+Schema::create('users', function (Blueprint $table) {
+    $table->id();
+    $table->string('name');
+    $table->string('last_name');
+    $table->string('email')->unique();
+    $table->string('password');
+    $table->tinyInteger('level_user')->default(0);
+    $table->boolean('yes_notifications')->default(false);
+    $table->text('foto')->nullable();
+    $table->timestamps();
+});
+```
+
+**Fields:**
+- `level_user`: User role (0 = normal, 1 = admin, 2 = super admin)
+- `yes_notifications`: Whether user receives weekly tardiness reports
+- `foto`: Profile photo path
+
+### Empleados Table
+
+**Migration:** `0001_01_01_000001_create_empleados_table.php`
+
+Stores employee information for check-in/check-out tracking.
+
+### Asistencias Table
+
+**Migration:** `0001_01_01_000002_create_asistencias_table.php`
+
+Records employee attendance entries and exits.
+
+### Configuraciones Table
+
+**Migration:** `0001_01_01_000003_create_configuraciones_table.php`
+
+Key-value configuration storage:
+
+```php
+Schema::create('configuraciones', function (Blueprint $table) {
+    $table->id();
+    $table->string('clave')->unique();
+    $table->string('valor');
+    $table->timestamps();
+});
+```
+
+See [System Settings](/configuration/system-settings) for usage details.
+
+## Running Migrations
+
+### Initial Setup
+
+After configuring your database connection, run migrations:
+
+```bash
+php artisan migrate
+```
+
+This creates all required tables in your database.
+
+### Checking Migration Status
+
+```bash
+php artisan migrate:status
+```
+
+### Rolling Back Migrations
+
+<Warning>
+This will delete all data in the affected tables.
+</Warning>
+
+```bash
+# Rollback the last batch
+php artisan migrate:rollback
+
+# Rollback all migrations
+php artisan migrate:reset
+
+# Rollback and re-run all migrations
+php artisan migrate:refresh
+```
+
+### Fresh Installation
+
+Drop all tables and re-run migrations:
+
+```bash
+php artisan migrate:fresh
+```
+
+## Advanced Configuration
+
+### Connection Pooling
+
+For production environments with high traffic, consider using connection pooling through your database server or a proxy like ProxySQL.
+
+### SSL/TLS Connections
+
+For MySQL with SSL:
+
+```env
+MYSQL_ATTR_SSL_CA=/path/to/ca-cert.pem
+```
+
+Update `config/database.php`:
+
+```php
+'options' => extension_loaded('pdo_mysql') ? array_filter([
+    Mysql::ATTR_SSL_CA => env('MYSQL_ATTR_SSL_CA'),
+]) : [],
+```
+
+### Read/Write Connections
+
+For load balancing with read replicas, modify `config/database.php`:
+
+```php
+'mysql' => [
+    'read' => [
+        'host' => [
+            '192.168.1.1',
+            '192.168.1.2',
+        ],
+    ],
+    'write' => [
+        'host' => [
+            '196.168.1.3',
+        ],
+    ],
+    // ... other settings
+],
+```
+
+## Troubleshooting
+
+### Connection Refused
+
+If you see "Connection refused" errors:
+
+1. Verify the database service is running
+2. Check `DB_HOST` and `DB_PORT` settings
+3. Ensure firewall allows connections
+4. For MySQL, verify bind-address in `my.cnf`
+
+### Access Denied
+
+If you see "Access denied" errors:
+
+1. Verify `DB_USERNAME` and `DB_PASSWORD`
+2. Check user privileges:
+
+```sql
+GRANT ALL PRIVILEGES ON checadorcumbres.* TO 'your_user'@'localhost';
+FLUSH PRIVILEGES;
+```
+
+### Character Encoding Issues
+
+Ensure your database uses UTF-8:
+
+```sql
+ALTER DATABASE checadorcumbres CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+```
+
+## Database Maintenance
+
+### Backing Up
+
+For MySQL:
+
+```bash
+mysqldump -u root -p checadorcumbres > backup.sql
+```
+
+### Restoring
+
+```bash
+mysql -u root -p checadorcumbres < backup.sql
+```
+
+<Note>
+Schedule regular automated backups for production environments.
+</Note>
+
+## Performance Optimization
+
+### Indexing
+
+The migrations include appropriate indexes for common queries. Monitor slow queries and add indexes as needed:
+
+```sql
+CREATE INDEX idx_asistencias_empleado ON asistencias(empleado_id);
+CREATE INDEX idx_asistencias_created ON asistencias(created_at);
+```
+
+### Query Caching
+
+Laravel provides query result caching:
+
+```php
+$users = Cache::remember('users', 3600, function () {
+    return User::all();
+});
+```
+
+See the [Environment Configuration](/configuration/environment) page for cache setup details.

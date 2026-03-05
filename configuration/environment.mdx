@@ -1,0 +1,302 @@
+---
+title: Environment Variables
+description: Configure your ChecadorCumbres application with environment variables
+---
+
+## Overview
+
+ChecadorCumbres uses Laravel's environment variable system to configure the application. All environment variables are stored in the `.env` file at the root of your project.
+
+<Warning>
+The `.env` file contains sensitive information and should never be committed to version control. Use `.env.example` as a template.
+</Warning>
+
+## Required Variables
+
+### Application Settings
+
+<ParamField path="APP_NAME" type="string" default="Laravel">
+  The name of your application. This is used in email notifications and throughout the UI.
+  
+  ```bash
+  APP_NAME=ChecadorCumbres
+  ```
+</ParamField>
+
+<ParamField path="APP_ENV" type="string" default="local" required>
+  The application environment. Use `local` for development, `production` for live deployment.
+  
+  ```bash
+  APP_ENV=production
+  ```
+</ParamField>
+
+<ParamField path="APP_KEY" type="string" required>
+  Application encryption key. Generate using `php artisan key:generate`.
+  
+  <Warning>
+  Never share or commit your APP_KEY. Generate a new one for each environment.
+  </Warning>
+  
+  ```bash
+  APP_KEY=base64:your-generated-key-here
+  ```
+</ParamField>
+
+<ParamField path="APP_DEBUG" type="boolean" default="true">
+  Enable or disable debug mode. Set to `false` in production for security.
+  
+  ```bash
+  APP_DEBUG=false
+  ```
+</ParamField>
+
+<ParamField path="APP_URL" type="string" default="http://localhost">
+  The base URL of your application. Used for generating links and emails.
+  
+  ```bash
+  APP_URL=https://checador.example.com
+  ```
+</ParamField>
+
+### Localization
+
+<ParamField path="APP_LOCALE" type="string" default="en">
+  Default application locale.
+  
+  ```bash
+  APP_LOCALE=es
+  ```
+</ParamField>
+
+<ParamField path="APP_FALLBACK_LOCALE" type="string" default="en">
+  Fallback locale if the default is unavailable.
+  
+  ```bash
+  APP_FALLBACK_LOCALE=en
+  ```
+</ParamField>
+
+### Database Configuration
+
+<ParamField path="DB_CONNECTION" type="string" default="mysql" required>
+  Database driver to use. Supports: `mysql`, `mariadb`, `pgsql`, `sqlite`, `sqlsrv`.
+  
+  ```bash
+  DB_CONNECTION=mysql
+  ```
+</ParamField>
+
+<ParamField path="DB_HOST" type="string" default="127.0.0.1" required>
+  Database server hostname or IP address.
+  
+  ```bash
+  DB_HOST=127.0.0.1
+  ```
+</ParamField>
+
+<ParamField path="DB_PORT" type="string" default="3306" required>
+  Database server port number.
+  
+  ```bash
+  DB_PORT=3306
+  ```
+</ParamField>
+
+<ParamField path="DB_DATABASE" type="string" default="checadorcumbres" required>
+  Name of the database to connect to.
+  
+  ```bash
+  DB_DATABASE=checadorcumbres
+  ```
+</ParamField>
+
+<ParamField path="DB_USERNAME" type="string" default="root" required>
+  Database username for authentication.
+  
+  ```bash
+  DB_USERNAME=your_database_user
+  ```
+</ParamField>
+
+<ParamField path="DB_PASSWORD" type="string" required>
+  Database password for authentication.
+  
+  <Warning>
+  Use a strong password and never commit it to version control.
+  </Warning>
+  
+  ```bash
+  DB_PASSWORD=your_secure_password
+  ```
+</ParamField>
+
+### Session and Cache
+
+<ParamField path="SESSION_DRIVER" type="string" default="database">
+  Session storage driver. ChecadorCumbres uses database sessions by default.
+  
+  ```bash
+  SESSION_DRIVER=database
+  ```
+</ParamField>
+
+<ParamField path="SESSION_LIFETIME" type="integer" default="120">
+  Session lifetime in minutes.
+  
+  ```bash
+  SESSION_LIFETIME=120
+  ```
+</ParamField>
+
+<ParamField path="CACHE_STORE" type="string" default="database">
+  Cache storage driver.
+  
+  ```bash
+  CACHE_STORE=database
+  ```
+</ParamField>
+
+<ParamField path="QUEUE_CONNECTION" type="string" default="database">
+  Queue driver for background jobs.
+  
+  ```bash
+  QUEUE_CONNECTION=database
+  ```
+</ParamField>
+
+### Mail Configuration
+
+<ParamField path="MAIL_MAILER" type="string" default="log">
+  Mail driver to use. Options: `smtp`, `sendmail`, `mailgun`, `ses`, `postmark`, `log`.
+  
+  ```bash
+  MAIL_MAILER=smtp
+  ```
+</ParamField>
+
+<ParamField path="MAIL_HOST" type="string" default="127.0.0.1">
+  SMTP server hostname.
+  
+  ```bash
+  MAIL_HOST=smtp.gmail.com
+  ```
+</ParamField>
+
+<ParamField path="MAIL_PORT" type="integer" default="2525">
+  SMTP server port number.
+  
+  ```bash
+  MAIL_PORT=587
+  ```
+</ParamField>
+
+<ParamField path="MAIL_USERNAME" type="string">
+  SMTP authentication username.
+  
+  ```bash
+  MAIL_USERNAME=your_email@example.com
+  ```
+</ParamField>
+
+<ParamField path="MAIL_PASSWORD" type="string">
+  SMTP authentication password.
+  
+  ```bash
+  MAIL_PASSWORD=your_mail_password
+  ```
+</ParamField>
+
+<ParamField path="MAIL_FROM_ADDRESS" type="string" default="hello@example.com">
+  Default sender email address.
+  
+  ```bash
+  MAIL_FROM_ADDRESS=noreply@checador.example.com
+  ```
+</ParamField>
+
+<ParamField path="MAIL_FROM_NAME" type="string" default="${APP_NAME}">
+  Default sender name for emails.
+  
+  ```bash
+  MAIL_FROM_NAME="ChecadorCumbres System"
+  ```
+</ParamField>
+
+### Logging
+
+<ParamField path="LOG_CHANNEL" type="string" default="stack">
+  Default log channel.
+  
+  ```bash
+  LOG_CHANNEL=stack
+  ```
+</ParamField>
+
+<ParamField path="LOG_LEVEL" type="string" default="debug">
+  Minimum log level. Options: `debug`, `info`, `notice`, `warning`, `error`, `critical`, `alert`, `emergency`.
+  
+  ```bash
+  LOG_LEVEL=info
+  ```
+</ParamField>
+
+## Security Considerations
+
+<Warning>
+**Production Environment Checklist:**
+
+1. Set `APP_ENV=production`
+2. Set `APP_DEBUG=false` to hide error details
+3. Generate a unique `APP_KEY` for each environment
+4. Use strong database passwords
+5. Configure proper mail settings for notifications
+6. Never commit `.env` file to version control
+7. Set appropriate `SESSION_LIFETIME` for your security requirements
+</Warning>
+
+## Initial Setup
+
+After configuring your `.env` file:
+
+```bash
+# Generate application key
+php artisan key:generate
+
+# Run migrations
+php artisan migrate
+
+# Clear configuration cache
+php artisan config:clear
+```
+
+<Note>
+Changes to environment variables require clearing the configuration cache in production:
+```bash
+php artisan config:cache
+```
+</Note>
+
+## Optional Variables
+
+### Redis Configuration
+
+If you plan to use Redis for caching or queues:
+
+```bash
+REDIS_CLIENT=phpredis
+REDIS_HOST=127.0.0.1
+REDIS_PASSWORD=null
+REDIS_PORT=6379
+```
+
+### AWS Configuration
+
+For S3 file storage:
+
+```bash
+AWS_ACCESS_KEY_ID=
+AWS_SECRET_ACCESS_KEY=
+AWS_DEFAULT_REGION=us-east-1
+AWS_BUCKET=
+```

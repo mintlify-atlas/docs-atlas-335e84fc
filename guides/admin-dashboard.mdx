@@ -1,0 +1,140 @@
+---
+title: Admin Dashboard
+description: Learn how to navigate and use the admin dashboard to monitor employee attendance in real-time
+---
+
+The admin dashboard is your central hub for monitoring employee attendance, viewing daily statistics, and accessing detailed attendance records.
+
+## Accessing the Dashboard
+
+The admin dashboard is accessible at `/admin/asistencias` after logging in. This route is protected by authentication middleware and requires admin credentials.
+
+```php
+Route::get('/admin/asistencias', [AdminController::class, 'asistencias'])
+    ->name('admin.asistencias');
+```
+
+## Dashboard Statistics
+
+The dashboard displays four key metrics for the current day:
+
+<div className="grid grid-cols-1 md:grid-cols-2 gap-4 my-6">
+  <div>
+    ### Attendance of the Day (Asistencias del día)
+    Shows the total number of employees who have checked in today. Counted from all attendance records with a non-null `hora_entrada` for the current date.
+  </div>
+  <div>
+    ### Late Arrivals (Retardos del día)
+    Displays employees who checked in after the configured entry time limit. These records have `retardo = 1` in the database.
+  </div>
+  <div>
+    ### Check-outs of the Day (Salidas del día)
+    Shows employees who have checked out today. Counted from attendance records with a non-null `hora_salida`.
+  </div>
+  <div>
+    ### Missing of the Day (Faltantes del día)
+    Displays employees who haven't registered any attendance record for today.
+  </div>
+</div>
+
+<Note>
+All dashboard statistics are calculated in real-time and update automatically when you refresh the page.
+</Note>
+
+## Filtering Options
+
+The dashboard provides comprehensive filtering options to help you find specific attendance records:
+
+<Steps>
+  <Step title="Search by Name or Employee Number">
+    Enter an employee's name, surname, or employee number in the search field. The search is case-insensitive and searches across:
+    - First names (`nombres`)
+    - Paternal surname (`apellido_paterno`)
+    - Maternal surname (`apellido_materno`)
+    - Employee ID (`id`)
+  </Step>
+
+  <Step title="Filter by Date Range">
+    Use the **Fecha inicio** and **Fecha fin** fields to specify a date range. When no dates are selected, the dashboard shows today's records by default.
+  </Step>
+
+  <Step title="Filter by Department">
+    Select from the following departments:
+    - Academia
+    - Administración
+    - Dirección
+    - Preescolar
+    - Primaria
+    - Promoción
+    - Secundaria
+    - Mantenimiento
+  </Step>
+
+  <Step title="Filter by Tardiness">
+    Choose:
+    - **Todos**: Show all records
+    - **Sí**: Show only late arrivals
+    - **No**: Show only on-time arrivals
+  </Step>
+
+  <Step title="Filter by Entry Time">
+    - **Con hora**: Show records with check-in time
+    - **Sin hora**: Show records without check-in time
+  </Step>
+
+  <Step title="Filter by Exit Time">
+    - **Con hora**: Show records with check-out time
+    - **Sin hora**: Show records without check-out time
+  </Step>
+
+  <Step title="Apply Filters">
+    Click the **Filtrar** button to apply your filters. To clear all filters, click **Borrar filtros**.
+  </Step>
+</Steps>
+
+<Warning>
+When you select both "Sin hora de entrada" (No entry time) and "Sin hora de salida" (No exit time), the system shows employees without any attendance record for the selected date.
+</Warning>
+
+## Understanding the Attendance Table
+
+The attendance table displays the following columns:
+
+| Column | Description |
+|--------|-------------|
+| **N. Empleado** | Employee number (unique identifier) |
+| **Nombre** | Full name (first name + paternal surname + maternal surname) |
+| **Departamento** | Employee's department |
+| **Fecha** | Date of attendance record (shown when filters are active) |
+| **Hora de entrada** | Check-in time (shows "Sin registro" in red if missing) |
+| **Hora de salida** | Check-out time (shows "Sin registro" in red if missing) |
+| **Retardo** | Late status ("Sí" in red for late, "No" in green for on-time) |
+
+<Note>
+The **Fecha** column only appears when you're using date range filters or searching for specific records.
+</Note>
+
+## Pagination
+
+When viewing unfiltered results, the dashboard displays 10 records per page with pagination controls at the bottom. When filters are applied, all matching records are shown in a single view to facilitate report generation.
+
+## Tips for Efficient Dashboard Use
+
+<Accordion title="How to find employees without check-ins">
+  Set the **Hora de entrada** filter to "Sin hora" and leave other filters empty. This will show all employees who haven't checked in yet.
+</Accordion>
+
+<Accordion title="How to monitor tardiness trends">
+  Use the **Fecha inicio** and **Fecha fin** fields to select a date range, then set **Retardo** to "Sí". This shows all late arrivals within that period.
+</Accordion>
+
+<Accordion title="How to check department attendance">
+  Select a department from the **Departamento** dropdown and leave the date filters empty to see today's attendance for that specific department.
+</Accordion>
+
+<Accordion title="Why am I seeing 'Sin registro'?">
+  "Sin registro" (No record) appears when an employee hasn't checked in or out. This could mean:
+  - The employee hasn't arrived yet (for check-in)
+  - The employee hasn't left yet (for check-out)
+  - The employee is absent for the day
+</Accordion>

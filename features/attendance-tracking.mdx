@@ -1,0 +1,382 @@
+---
+title: 'Attendance Tracking'
+description: 'Real-time check-in/check-out system with automatic late detection and flexible schedule support'
+icon: 'clock'
+---
+
+## Overview
+
+ChecadorCumbres provides a sophisticated attendance tracking system that handles check-in and check-out operations, automatically detects late arrivals, and supports both base schedules and flexible schedules. The system is designed to work in real-time and adapts to different work schedule types.
+
+## Asistencia Model
+
+The attendance records are stored in the `Asistencia` model with the following structure:
+
+```php
+protected $fillable = [
+    'empleado_id',    // Employee ID (foreign key)
+    'hora_entrada',   // Check-in time
+    'hora_salida',    // Check-out time
+    'retardo'         // Late flag (boolean)
+];
+
+protected $casts = [
+    'hora_entrada' => 'datetime',
+    'hora_salida' => 'datetime',
+];
+```
+
+<Info>
+The system uses Carbon datetime objects for precise time calculations and timezone management.
+</Info>
+
+## Check-In/Check-Out Workflow
+
+### Entry Point: Employee Lookup
+
+The attendance process begins when an employee scans their ID:
+
+```php
+public function buscarEmpleado($id)
+{
+    $empleado = Empleado::find($id);
+    
+    if (!$empleado) {
+        return response()->json([
+            'success' => false,
+            'error' => 'Empleado no encontrado.'
+        ], 200);
+    }
+    
+    $respuesta = $this->agregarAsistencia($empleado);
+    
+    return response()->json([
+        'empleado' => $empleado,
+        'asistencia' => $respuesta,
+    ]);
+}
+```
+
+### Main Attendance Logic
+
+The system automatically determines whether to record check-in or check-out based on schedule type and time:
+
+```php
+public function agregarAsistencia($empleado)
+{
+    $ahora = now();
+    $fechaHoy = $ahora->format('Y-m-d');
+    $horaLimiteSalida = \Carbon\Carbon::parse(
+        $fechaHoy . ' ' . Configuracion::getValor('hora_limite_salida', '11:30:00')
+    );
+    
+    if ($this->esHorarioLibre($empleado)) {
+        return $this->agregarAsistenciaHorarioLibre($empleado, $ahora);
+    }
+    
+    return $this->agregarAsistenciaHorarioBase($empleado, $ahora, $horaLimiteSalida, $fechaHoy);
+}
+```
+
+<CardGroup cols={2}>
+  <Card title="Flexible Schedule" icon="calendar-days">
+    For "horario libre" employees, the system uses time-based logic to determine if it's a check-in or check-out.
+  </Card>
+  <Card title="Base Schedule" icon="calendar-check">
+    For "horario base" employees, the system uses cutoff times and automatic late detection.
+  </Card>
+</CardGroup>
+
+## Late Arrival Detection
+
+### Base Schedule Late Detection
+
+For employees with base schedules, the system automatically detects late arrivals:
+
+```php
+private function registrarEntrada($empleado, $ahora, $horaLimiteCompleta = null)
+{
+    $retardo = false;
+    
+    if ($horaLimiteCompleta) {
+        $retardo = $ahora->greaterThan($horaLimiteCompleta);
+    }
+    
+    Asistencia::create([
+        'empleado_id' => $empleado->id,
+        'hora_entrada' => $ahora,
+        'hora_salida' => null,
+        'retardo' => $retardo,
+    ]);
+    
+    return [
+        'success' => true,
+        'message' => 'Entrada registrada correctamente.',
+    ];
+}
+```
+
+**Late detection rules:**
+- Default entry cutoff: `07:35:00` (configurable via `Configuracion` model)
+- Arrival after cutoff time automatically marks as late (`retardo = true`)
+- Late status is permanent and used for reporting
+
+### Configurable Time Limits
+
+Time limits are stored in the `configuraciones` table and can be adjusted:
+
+```php
+$horaLimiteEntrada = Configuracion::getValor('hora_limite_entrada', '07:35:00');
+$horaLimiteSalida = Configuracion::getValor('hora_limite_salida', '11:30:00');
+```
+
+<Note>
+The `hora_limite_salida` (11:30:00 by default) serves as the cutoff between morning check-ins and afternoon check-outs.
+</Note>
+
+## Base Schedule Workflow
+
+For employees with "horario base", the system follows strict time-based rules:
+
+```php
+private function agregarAsistenciaHorarioBase($empleado, $ahora, $horaLimiteSalida, $fechaHoy)
+{
+    if ($ahora->lessThan($horaLimiteSalida)) {
+        // Before 11:30 AM - Handle check-in
+        $asistencia = $this->obtenerAsistenciaHoy($empleado);
+        
+        if ($asistencia) {
+            if (!empty($asistencia->hora_entrada) && empty($asistencia->hora_salida)) {
+                return [
+                    'success' => false,
+                    'confirmar_salida' => true,
+                    'message' => 'Ya has marcado tu entrada. ¿Quieres marcar tu salida?',
+                    'asistencia_id' => $asistencia->id,
+                ];
+            }
+        }
+        
+        $horaLimiteCompleta = \Carbon\Carbon::parse(
+            $fechaHoy . ' ' . Configuracion::getValor('hora_limite_entrada', '07:35:00')
+        );
+        return $this->registrarEntrada($empleado, $ahora, $horaLimiteCompleta);
+    }
+    
+    // After 11:30 AM - Handle check-out
+    $asistencia = $this->obtenerAsistenciaHoy($empleado);
+    
+    if ($asistencia) {
+        if ($this->yaTieneSalidaHoy($asistencia)) {
+            return [
+                'success' => false,
+                'message' => 'Ya has marcado la salida para hoy.',
+            ];
+        }
+        return $this->registrarSalida($asistencia, $ahora);
+    }
+    
+    return $this->crearSalidaSinEntrada($empleado, $ahora);
+}
+```
+
+### Time-Based Decision Making
+
+<Accordion title="Before 11:30 AM">
+- **First scan:** Records check-in, checks for late arrival
+- **Second scan:** Prompts confirmation for early check-out
+- **Already complete:** Returns error message
+</Accordion>
+
+<Accordion title="After 11:30 AM">
+- **Has check-in:** Records check-out
+- **No check-in:** Creates check-out-only record and marks as late
+- **Already checked out:** Returns error message
+</Accordion>
+
+## Flexible Schedule Workflow
+
+For employees with "horario libre", the system is more lenient:
+
+```php
+private function agregarAsistenciaHorarioLibre($empleado, $ahora)
+{
+    $asistencia = $this->obtenerAsistenciaHoy($empleado);
+    
+    if (!$asistencia) {
+        return $this->registrarEntrada($empleado, $ahora);
+    }
+    
+    if ($asistencia && is_null($asistencia->hora_salida)) {
+        return $this->validarSalidaHorarioLibre($asistencia, $ahora);
+    }
+    
+    return [
+        'success' => false,
+        'message' => 'Ya tienes registrada la entrada y salida para hoy.',
+    ];
+}
+```
+
+### Smart Check-Out Detection
+
+The system uses time elapsed since check-in to determine behavior:
+
+```php
+private function validarSalidaHorarioLibre($asistencia, $ahora)
+{
+    $horaEntrada = \Carbon\Carbon::parse($asistencia->hora_entrada);
+    $minutosDesdeEntrada = $horaEntrada->diffInMinutes($ahora);
+    
+    if ($minutosDesdeEntrada < 60) {
+        return [
+            'success' => false,
+            'confirmar_salida' => true,
+            'message' => 'Ya has marcado tu entrada. ¿Quieres marcar tu salida?',
+            'asistencia_id' => $asistencia->id,
+        ];
+    }
+    
+    // More than one hour - automatically record check-out
+    return $this->registrarSalida($asistencia, $ahora);
+}
+```
+
+<CardGroup cols={2}>
+  <Card title="Less than 1 hour" icon="hourglass-start">
+    Requires confirmation to prevent accidental early check-outs
+  </Card>
+  <Card title="More than 1 hour" icon="hourglass-end">
+    Automatically records check-out without confirmation
+  </Card>
+</CardGroup>
+
+## Attendance Record Retrieval
+
+The system retrieves today's attendance using a flexible query:
+
+```php
+private function obtenerAsistenciaHoy($empleado)
+{
+    return Asistencia::where('empleado_id', $empleado->id)
+        ->where(function ($query) {
+            $query->whereDate('hora_entrada', today())
+                ->orWhereDate('hora_salida', today());
+        })
+        ->first();
+}
+```
+
+<Info>
+This query handles edge cases where an employee checks in late at night and checks out after midnight.
+</Info>
+
+## Special Cases
+
+### Check-Out Without Check-In
+
+When an employee scans only for check-out (missed morning check-in):
+
+```php
+private function crearSalidaSinEntrada($empleado, $ahora)
+{
+    $retardo = false;
+    $horaE = $ahora;
+    
+    if (strtolower($empleado->tipo_horario) === 'horario base') {
+        $horaE = null;
+        $retardo = true; 
+    }
+    
+    Asistencia::create([
+        'empleado_id' => $empleado->id,
+        'hora_entrada' => $horaE,
+        'hora_salida' => $ahora,
+        'retardo' => $retardo,
+    ]);
+}
+```
+
+**Behavior:**
+- **Base schedule:** `hora_entrada = null`, `retardo = true`
+- **Flexible schedule:** `hora_entrada = current time`, `retardo = false`
+
+### Confirmed Early Check-Out
+
+When users confirm an early check-out:
+
+```php
+public function marcarSalidaConfirmada($id)
+{
+    $asistencia = Asistencia::find($id);
+    
+    if ($asistencia->hora_salida !== null) {
+        return response()->json([
+            'success' => false,
+            'message' => 'La salida ya fue registrada previamente.'
+        ], 400);
+    }
+    
+    $ahora = now();
+    $asistencia->hora_salida = $ahora;
+    $asistencia->save();
+    
+    return response()->json([
+        'success' => true,
+        'message' => 'Salida registrada correctamente.',
+    ]);
+}
+```
+
+## Real-Time Features
+
+<CardGroup cols={2}>
+  <Card title="Instant Validation" icon="bolt">
+    The system validates attendance in real-time and provides immediate feedback
+  </Card>
+  <Card title="Duplicate Prevention" icon="shield">
+    Automatic detection of duplicate check-ins/check-outs for the same day
+  </Card>
+  <Card title="Smart Confirmations" icon="circle-question">
+    Prompts user confirmation for unusual actions (early check-out, etc.)
+  </Card>
+  <Card title="Error Handling" icon="triangle-exclamation">
+    Comprehensive error messages guide users through any issues
+  </Card>
+</CardGroup>
+
+## Database Relationship
+
+Attendance records are linked to employees through a belongs-to relationship:
+
+```php
+public function empleado()
+{
+    return $this->belongsTo(Empleado::class, 'empleado_id', 'id');
+}
+```
+
+This enables:
+- Loading employee information with attendance records
+- Filtering attendance by employee attributes
+- Generating comprehensive reports with employee details
+
+## Best Practices
+
+<Warning>
+Always use the `obtenerAsistenciaHoy()` method to check for existing attendance records before creating new ones. This prevents duplicate entries.
+</Warning>
+
+<Note>
+The system uses configurable time limits from the `configuraciones` table. Always use `Configuracion::getValor()` instead of hardcoding times.
+</Note>
+
+## Related Resources
+
+<CardGroup cols={2}>
+  <Card title="Schedule Types" icon="calendar" href="/features/schedule-types">
+    Learn about base vs flexible schedule types
+  </Card>
+  <Card title="Reporting" icon="chart-bar" href="/features/reporting">
+    Generate attendance reports and analytics
+  </Card>
+</CardGroup>

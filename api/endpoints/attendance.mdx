@@ -1,0 +1,449 @@
+---
+title: 'Attendance Endpoints'
+description: 'API reference for employee attendance tracking and management'
+---
+
+## Overview
+
+The attendance endpoints handle employee check-in/check-out operations and provide attendance data for administrators. The system supports different schedule types (base schedule and flexible schedule) with automatic tardiness detection.
+
+## Search Employee and Mark Attendance
+
+<CodeGroup>
+```http GET /empleado/{id}/buscar
+GET /empleado/12345/buscar
+```
+</CodeGroup>
+
+Searches for an employee by ID and automatically marks their attendance (entry or exit) based on business rules.
+
+### Authentication
+Not required. This is a public endpoint for employee self-service.
+
+### Path Parameters
+
+<ParamField path="id" type="integer" required>
+  Employee ID to search and mark attendance
+</ParamField>
+
+### Response
+
+#### Success - Employee Found
+
+<ResponseField name="empleado" type="object">
+  Employee information
+  <Expandable title="properties">
+    <ResponseField name="id" type="integer">
+      Employee number
+    </ResponseField>
+    <ResponseField name="nombres" type="string">
+      Employee first name(s)
+    </ResponseField>
+    <ResponseField name="apellido_paterno" type="string">
+      Paternal last name
+    </ResponseField>
+    <ResponseField name="apellido_materno" type="string">
+      Maternal last name
+    </ResponseField>
+    <ResponseField name="departamento" type="string">
+      Department name
+    </ResponseField>
+    <ResponseField name="puesto" type="string">
+      Job position
+    </ResponseField>
+    <ResponseField name="email" type="string">
+      Email address
+    </ResponseField>
+    <ResponseField name="tipo_horario" type="string">
+      Schedule type ("horario base" or "horario libre")
+    </ResponseField>
+    <ResponseField name="foto" type="string|null">
+      Photo filename
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="asistencia" type="object">
+  Attendance operation result
+  <Expandable title="properties">
+    <ResponseField name="success" type="boolean">
+      Whether the operation was successful
+    </ResponseField>
+    <ResponseField name="message" type="string">
+      Status message describing the operation result
+    </ResponseField>
+    <ResponseField name="confirmar_salida" type="boolean" optional>
+      If true, asking for confirmation before marking check-out
+    </ResponseField>
+    <ResponseField name="asistencia_id" type="integer" optional>
+      ID of the attendance record (provided when confirmation needed)
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<CodeGroup>
+```json Entry Registered
+{
+  "empleado": {
+    "id": 12345,
+    "nombres": "Juan Carlos",
+    "apellido_paterno": "Garcia",
+    "apellido_materno": "Lopez",
+    "departamento": "primaria",
+    "puesto": "Maestro",
+    "email": "juan@school.edu.mx",
+    "tipo_horario": "horario base",
+    "foto": "550e8400-e29b-41d4-a716-446655440000.jpg"
+  },
+  "asistencia": {
+    "success": true,
+    "message": "Entrada registrada correctamente."
+  }
+}
+```
+
+```json Exit Confirmation Required
+{
+  "empleado": { /* employee data */ },
+  "asistencia": {
+    "success": false,
+    "confirmar_salida": true,
+    "message": "Ya has marcado tu entrada. ¿Quieres marcar tu salida?",
+    "asistencia_id": 789
+  }
+}
+```
+
+```json Exit Registered
+{
+  "empleado": { /* employee data */ },
+  "asistencia": {
+    "success": true,
+    "message": "Salida registrada correctamente."
+  }
+}
+```
+
+```json Already Registered
+{
+  "empleado": { /* employee data */ },
+  "asistencia": {
+    "success": false,
+    "message": "Ya tienes tu entrada y salida marcadas para hoy."
+  }
+}
+```
+</CodeGroup>
+
+#### Error Responses
+
+<CodeGroup>
+```json 200 Employee Not Found
+{
+  "success": false,
+  "error": "Empleado no encontrado."
+}
+```
+
+```json 500 Server Error
+{
+  "success": false,
+  "message": "Error al registrar asistencia: Database connection failed"
+}
+```
+</CodeGroup>
+
+### Business Rules
+
+#### Base Schedule ("horario base")
+- **Before limit time (default 11:30)**: Marks entry
+  - Checks against configured entry limit (default 07:35)
+  - Automatically sets `retardo=true` if after limit
+- **After limit time**: Marks exit
+  - If no entry exists, creates exit-only record with `retardo=true`
+- **Flexible Schedule ("horario libre")**: Always allows entry/exit
+  - First scan: marks entry
+  - Second scan within 60 minutes: requires confirmation
+  - Second scan after 60 minutes: automatically marks exit
+
+---
+
+## Confirm Check-Out
+
+<CodeGroup>
+```http POST /asistencia/{id}/salida
+POST /asistencia/789/salida
+Content-Type: application/json
+```
+</CodeGroup>
+
+Confirms and registers the check-out time for an attendance record.
+
+### Authentication
+Not required. This is a public endpoint.
+
+### Path Parameters
+
+<ParamField path="id" type="integer" required>
+  Attendance record ID to confirm check-out
+</ParamField>
+
+### Response
+
+<CodeGroup>
+```json 200 Success
+{
+  "success": true,
+  "message": "Salida registrada correctamente."
+}
+```
+
+```json 404 Not Found
+{
+  "success": false,
+  "message": "Registro de asistencia no encontrado."
+}
+```
+
+```json 400 Already Registered
+{
+  "success": false,
+  "message": "La salida ya fue registrada previamente."
+}
+```
+</CodeGroup>
+
+---
+
+## Attendance Dashboard
+
+<CodeGroup>
+```http GET /admin/asistencias
+GET /admin/asistencias?fecha_inicio=2024-03-01&fecha_fin=2024-03-31&departamento=primaria&retardo=1
+Authorization: Bearer {token}
+```
+</CodeGroup>
+
+Retrieves attendance records with advanced filtering capabilities. Returns HTML view with attendance data and statistics.
+
+### Authentication
+Required. User must be authenticated.
+
+### Query Parameters
+
+<ParamField query="buscar" type="string">
+  Search by employee name, last name, or employee ID (case-insensitive)
+</ParamField>
+
+<ParamField query="fecha_inicio" type="date" format="Y-m-d">
+  Start date for filtering records
+</ParamField>
+
+<ParamField query="fecha_fin" type="date" format="Y-m-d">
+  End date for filtering records
+</ParamField>
+
+<ParamField query="departamento" type="string">
+  Filter by department name (exact match)
+</ParamField>
+
+<ParamField query="retardo" type="string" enum='["0", "1"]'>
+  Filter by tardiness: "1" for late, "0" for on-time
+</ParamField>
+
+<ParamField query="hora_entrada" type="string" enum='["0", "1"]'>
+  Filter by entry time presence: "1" for has entry, "0" for no entry
+</ParamField>
+
+<ParamField query="hora_salida" type="string" enum='["0", "1"]'>
+  Filter by exit time presence: "1" for has exit, "0" for no exit
+</ParamField>
+
+<ParamField query="page" type="integer" default="1">
+  Page number for pagination (10 items per page)
+</ParamField>
+
+### Response
+
+Returns an HTML view with attendance records and daily statistics.
+
+<ResponseField name="asistencias" type="object">
+  Paginated attendance collection or complete date range with missing days
+</ResponseField>
+
+<ResponseField name="asistenciaE" type="integer">
+  Count of entries registered today
+</ResponseField>
+
+<ResponseField name="asistenciaS" type="integer">
+  Count of exits registered today
+</ResponseField>
+
+<ResponseField name="retardosHoy" type="integer">
+  Count of tardiness records today
+</ResponseField>
+
+<ResponseField name="cantidadSinAsistencia" type="integer">
+  Count of employees without attendance today
+</ResponseField>
+
+<ResponseField name="hayFiltros" type="boolean">
+  Whether any filters are applied
+</ResponseField>
+
+### Attendance Record Structure
+
+<ResponseField name="empleado_id" type="integer">
+  Employee ID
+</ResponseField>
+
+<ResponseField name="hora_entrada" type="datetime|null">
+  Check-in timestamp (null if no entry)
+</ResponseField>
+
+<ResponseField name="hora_salida" type="datetime|null">
+  Check-out timestamp (null if no exit)
+</ResponseField>
+
+<ResponseField name="retardo" type="boolean|null">
+  Tardiness flag (null for missing attendance)
+</ResponseField>
+
+<ResponseField name="created_at" type="datetime">
+  Record creation date
+</ResponseField>
+
+<ResponseField name="empleado" type="object">
+  Related employee object
+</ResponseField>
+
+### Special Filtering Behavior
+
+- **No filters applied**: Returns today's attendance only
+- **Filters applied**: Returns all matching records with missing days filled in
+- **Both hora_entrada=0 and hora_salida=0**: Returns employees with no attendance for the specified date
+
+### Error Responses
+
+<CodeGroup>
+```json 403 Forbidden
+"Acceso no autorizado"
+```
+
+```json 500 Server Error
+Location: previous page
+Session: error = "Error al cargar la página de Dashboard: {error_message}"
+```
+</CodeGroup>
+
+---
+
+## Code Examples
+
+### Mark Attendance with JavaScript
+
+<CodeGroup>
+```javascript Fetch API
+// Search and mark attendance
+const employeeId = 12345;
+
+fetch(`https://your-domain.com/empleado/${employeeId}/buscar`)
+  .then(response => response.json())
+  .then(data => {
+    if (data.success === false && data.error) {
+      console.error('Employee not found:', data.error);
+      return;
+    }
+    
+    console.log('Employee:', data.empleado.nombres);
+    console.log('Status:', data.asistencia.message);
+    
+    // Check if confirmation is needed
+    if (data.asistencia.confirmar_salida) {
+      const confirm = window.confirm(data.asistencia.message);
+      if (confirm) {
+        // Confirm check-out
+        fetch(`/asistencia/${data.asistencia.asistencia_id}/salida`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+          }
+        })
+        .then(response => response.json())
+        .then(result => {
+          console.log('Check-out result:', result.message);
+        });
+      }
+    }
+  })
+  .catch(error => console.error('Error:', error));
+```
+
+```php PHP (Guzzle)
+use GuzzleHttp\Client;
+
+$client = new Client();
+$employeeId = 12345;
+
+try {
+    $response = $client->get("https://your-domain.com/empleado/{$employeeId}/buscar");
+    $data = json_decode($response->getBody(), true);
+    
+    if (isset($data['success']) && $data['success'] === false) {
+        echo "Error: " . $data['error'];
+        return;
+    }
+    
+    echo "Employee: " . $data['empleado']['nombres'] . "\n";
+    echo "Status: " . $data['asistencia']['message'] . "\n";
+    
+    // Handle confirmation if needed
+    if (!empty($data['asistencia']['confirmar_salida'])) {
+        $asistenciaId = $data['asistencia']['asistencia_id'];
+        
+        $confirmResponse = $client->post(
+            "https://your-domain.com/asistencia/{$asistenciaId}/salida",
+            ['headers' => ['Content-Type' => 'application/json']]
+        );
+        
+        $confirmData = json_decode($confirmResponse->getBody(), true);
+        echo "Check-out: " . $confirmData['message'] . "\n";
+    }
+} catch (\Exception $e) {
+    echo "Error: " . $e->getMessage();
+}
+```
+
+```python Python (Requests)
+import requests
+
+employee_id = 12345
+base_url = "https://your-domain.com"
+
+try:
+    # Search and mark attendance
+    response = requests.get(f"{base_url}/empleado/{employee_id}/buscar")
+    data = response.json()
+    
+    if not data.get('success', True) and 'error' in data:
+        print(f"Error: {data['error']}")
+    else:
+        print(f"Employee: {data['empleado']['nombres']}")
+        print(f"Status: {data['asistencia']['message']}")
+        
+        # Handle confirmation if needed
+        if data['asistencia'].get('confirmar_salida'):
+            asistencia_id = data['asistencia']['asistencia_id']
+            
+            confirm_response = requests.post(
+                f"{base_url}/asistencia/{asistencia_id}/salida",
+                headers={'Content-Type': 'application/json'}
+            )
+            
+            confirm_data = confirm_response.json()
+            print(f"Check-out: {confirm_data['message']}")
+except Exception as e:
+    print(f"Error: {e}")
+```
+</CodeGroup>
