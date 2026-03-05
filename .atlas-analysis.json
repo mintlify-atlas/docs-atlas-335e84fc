@@ -1,0 +1,100 @@
+{
+  "projectType": "saas",
+  "projectName": "ChecadorCumbres",
+  "projectDescription": "Employee attendance tracking system with automated reporting and flexible schedule management",
+  "theme": "linden",
+  "primaryColor": "#040404",
+  "lightColor": "#ef370f",
+  "darkColor": "#f79d72",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Getting Started",
+            "pages": ["introduction", "installation", "quickstart"]
+          },
+          {
+            "group": "Core Features",
+            "pages": [
+              "features/employee-management",
+              "features/attendance-tracking",
+              "features/schedule-types",
+              "features/reporting"
+            ]
+          },
+          {
+            "group": "User Guides",
+            "pages": [
+              "guides/admin-dashboard",
+              "guides/check-in-out",
+              "guides/managing-employees",
+              "guides/generating-reports"
+            ]
+          },
+          {
+            "group": "Configuration",
+            "pages": [
+              "configuration/environment",
+              "configuration/database",
+              "configuration/system-settings",
+              "configuration/email-notifications"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": ["api/introduction", "api/authentication"]
+          },
+          {
+            "group": "Endpoints",
+            "pages": [
+              "api/endpoints/employees",
+              "api/endpoints/attendance",
+              "api/endpoints/reports",
+              "api/endpoints/users"
+            ]
+          },
+          {
+            "group": "Models",
+            "pages": [
+              "api/models/employee",
+              "api/models/asistencia",
+              "api/models/user",
+              "api/models/configuracion"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Employee check-in/check-out tracking",
+    "Automatic late arrival detection",
+    "Flexible and base schedule types",
+    "PDF and Excel report generation",
+    "Weekly tardiness email notifications",
+    "Admin dashboard with filtering",
+    "Employee management (CRUD operations)",
+    "Configurable time limits and settings"
+  ],
+  "publicApiSurface": [
+    "GET /empleado/{id}/buscar - Search employee and mark attendance",
+    "POST /asistencia/{id}/salida - Confirm check-out",
+    "GET /admin/asistencias - View attendance dashboard",
+    "GET /admin/asistencias/reporte/pdf - Generate PDF report",
+    "GET /admin/asistencias/reporte/excel - Generate Excel report",
+    "GET /admin/empleados - List all employees",
+    "POST /admin/empleados - Create new employee",
+    "PUT /admin/empleados/{id} - Update employee",
+    "DELETE /admin/empleados/{id} - Delete employee",
+    "GET /admin/usuarios - Manage users",
+    "POST /admin/preferencias/configuracion - Update system settings",
+    "php artisan app:enviar-reporte-retardos-semanales - Send weekly tardiness report"
+  ]
+}
